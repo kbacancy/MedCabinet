@@ -7,6 +7,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { scheduleMedicineNotifications } from '../../lib/notifications';
 
 const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
 const NUMPAD_ACCESSORY_ID = 'numpad-done-toolbar';
@@ -27,7 +28,7 @@ export default function AddMedicineScreen() {
     if (!name.trim()) { Alert.alert('Error', 'Medicine name is required.'); return; }
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('medicines').insert({
+    const { data, error } = await supabase.from('medicines').insert({
       user_id: user?.id,
       name: name.trim(),
       dosage: dosage.trim(),
@@ -35,10 +36,15 @@ export default function AddMedicineScreen() {
       expiry_date: expiryDate,
       category,
       refill_alert_at: parseInt(refillAt) || 5,
-    });
+    }).select();
     setLoading(false);
-    if (error) Alert.alert('Error', error.message);
-    else { Alert.alert('Saved', `${name} added to your cabinet.`); router.back(); }
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      if (data) await scheduleMedicineNotifications(data[0]);
+      Alert.alert('Saved', `${name} added to your cabinet.`);
+      router.back();
+    }
   };
 
   const formatExpiryInput = (text: string) => {

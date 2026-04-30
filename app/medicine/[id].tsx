@@ -8,6 +8,7 @@ import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { Medicine, daysUntilExpiry } from '../../hooks/useMedicines';
 import { checkInteractionsForOne } from '../../lib/interactions';
+import { cancelMedicineNotifications } from '../../lib/notifications';
 
 function ProgressBar({ value, total }: { value: number; total: number }) {
   const pct = total > 0 ? Math.min((value / total) * 100, 100) : 0;
@@ -54,7 +55,10 @@ export default function MedicineDetailScreen() {
             const { error } = await supabase.from('medicines').delete().eq('id', id);
             setDeleting(false);
             if (error) Alert.alert('Error', error.message);
-            else router.back();
+            else {
+              await cancelMedicineNotifications(id as string);
+              router.back();
+            }
           },
         },
       ],

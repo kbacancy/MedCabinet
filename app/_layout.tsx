@@ -4,6 +4,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { AnimatedSplash } from '../components/AnimatedSplash';
+import { setupNotificationChannels, requestNotificationPermissions } from '../lib/notifications';
 
 function RootLayoutNav({ session }: { session: Session | null }) {
   const segments = useSegments();
@@ -37,6 +38,9 @@ export default function RootLayout() {
   const splashReady = authLoaded && minTimePassed;
 
   useEffect(() => {
+    setupNotificationChannels();
+    requestNotificationPermissions();
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setAuthLoaded(true);

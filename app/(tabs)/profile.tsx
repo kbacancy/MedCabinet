@@ -5,6 +5,12 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import {
+  areNotificationsEnabled, areExpiryAlertsEnabled,
+  setNotificationsEnabled, setExpiryAlertsEnabled,
+  cancelAllNotifications, rescheduleAllNotifications,
+} from '../../lib/notifications';
+import type { Medicine } from '../../hooks/useMedicines';
 
 type RowProps = { emoji: string; label: string; onPress?: () => void; value?: React.ReactNode };
 
@@ -23,8 +29,8 @@ function SettingsRow({ emoji, label, onPress, value }: RowProps) {
 export default function ProfileScreen() {
   const [userName, setUserName] = useState('Arjun Sharma');
   const [userEmail, setUserEmail] = useState('arjun@email.com');
-  const [notifications, setNotifications] = useState(true);
-  const [expiryAlerts, setExpiryAlerts] = useState(true);
+  const [notifications, setNotificationsState] = useState(true);
+  const [expiryAlerts, setExpiryAlertsState] = useState(true);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -34,7 +40,39 @@ export default function ProfileScreen() {
         if (name) setUserName(name);
       }
     });
+    areNotificationsEnabled().then(setNotificationsState);
+    areExpiryAlertsEnabled().then(setExpiryAlertsState);
   }, []);
+
+  const handleNotificationsToggle = async (value: boolean) => {
+    setNotificationsState(value);
+    await setNotificationsEnabled(value);
+    if (!value) {
+      await cancelAllNotifications();
+    } else {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        const { data: meds } = await supabase
+          .from('medicines')
+          .select('*')
+          .eq('user_id', data.user.id);
+        if (meds) await rescheduleAllNotifications(meds as Medicine[]);
+      }
+    }
+  };
+
+  const handleExpiryAlertsToggle = async (value: boolean) => {
+    setExpiryAlertsState(value);
+    await setExpiryAlertsEnabled(value);
+    const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      const { data: meds } = await supabase
+        .from('medicines')
+        .select('*')
+        .eq('user_id', data.user.id);
+      if (meds) await rescheduleAllNotifications(meds as Medicine[]);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -68,13 +106,13 @@ export default function ProfileScreen() {
           <SettingsRow
             emoji="🔔"
             label="Push Notifications"
-            value={<Switch value={notifications} onValueChange={setNotifications} trackColor={{ true: Colors.primary }} thumbColor={Colors.white} />}
+            value={<Switch value={notifications} onValueChange={handleNotificationsToggle} trackColor={{ true: Colors.primary }} thumbColor={Colors.white} />}
           />
           <View style={styles.divider} />
           <SettingsRow
             emoji="⏰"
             label="Expiry Alerts"
-            value={<Switch value={expiryAlerts} onValueChange={setExpiryAlerts} trackColor={{ true: Colors.primary }} thumbColor={Colors.white} />}
+            value={<Switch value={expiryAlerts} onValueChange={handleExpiryAlertsToggle} trackColor={{ true: Colors.primary }} thumbColor={Colors.white} />}
           />
         </View>
 
