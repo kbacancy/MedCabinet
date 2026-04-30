@@ -68,7 +68,7 @@ export default function MedicineDetailScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Save', onPress: async (val) => {
+          text: 'Save', onPress: async (val?: string) => {
             const num = parseInt(val ?? '5');
             if (isNaN(num)) return;
             await supabase.from('medicines').update({ refill_alert_at: num }).eq('id', id);
@@ -106,7 +106,11 @@ export default function MedicineDetailScreen() {
 
   const formatExpiry = (dateStr: string) => {
     if (!dateStr) return 'N/A';
-    const d = new Date(dateStr);
+    const parts = dateStr.split('/');
+    const d = parts.length === 3
+      ? new Date(Number(parts[2]), Number(parts[0]) - 1, Number(parts[1]))
+      : new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
