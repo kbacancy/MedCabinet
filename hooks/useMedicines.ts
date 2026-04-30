@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
@@ -41,7 +41,16 @@ export function useMedicines() {
 
 export function daysUntilExpiry(expiryDate: string): number {
   if (!expiryDate) return 9999;
-  const expiry = new Date(expiryDate);
+  // Handle mm/dd/yyyy format explicitly for cross-platform compatibility
+  let expiry: Date;
+  const parts = expiryDate.split('/');
+  if (parts.length === 3) {
+    const [month, day, year] = parts.map(Number);
+    expiry = new Date(year, month - 1, day);
+  } else {
+    expiry = new Date(expiryDate);
+  }
+  if (isNaN(expiry.getTime())) return 9999;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));

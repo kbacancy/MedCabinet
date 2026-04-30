@@ -14,8 +14,8 @@ function TabIcon({ emoji }: { emoji: string }) {
 }
 
 function CabinetTabIcon({ focused }: { focused: boolean }) {
-  const color = focused ? Colors.primary : Colors.tabInactive;
-  const bg = focused ? Colors.primary : color;
+  const color = focused ? Colors.warning : Colors.tabInactive;
+  const bg = focused ? Colors.warning : color;
   return (
     <View style={styles.iconWrap}>
       <View style={[styles.medBag, { backgroundColor: bg }]}>
@@ -48,7 +48,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary,
+        tabBarActiveTintColor: Colors.warning,
         tabBarInactiveTintColor: Colors.tabInactive,
         tabBarStyle: {
           backgroundColor: Colors.white,

@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { useRouter, useSegments } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { View, ActivityIndicator } from 'react-native';
-import { Colors } from '../constants/colors';
 import { Session } from '@supabase/supabase-js';
+import { AnimatedSplash } from '../components/AnimatedSplash';
 
 function RootLayoutNav({ session }: { session: Session | null }) {
   const segments = useSegments();
@@ -31,26 +30,37 @@ function RootLayoutNav({ session }: { session: Session | null }) {
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoaded, setAuthLoaded] = useState(false);
+  const [minTimePassed, setMinTimePassed] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+
+  const splashReady = authLoaded && minTimePassed;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoading(false);
+      setAuthLoaded(true);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
-    return () => subscription.unsubscribe();
+    // Minimum display time so animations fully play
+    const timer = setTimeout(() => setMinTimePassed(true), 2200);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
   }, []);
 
-  if (loading) {
+  if (showSplash) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surfaceAlt }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
+      <AnimatedSplash
+        ready={splashReady}
+        onFinish={() => setShowSplash(false)}
+      />
     );
   }
 
