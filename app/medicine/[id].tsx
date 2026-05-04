@@ -135,7 +135,9 @@ export default function MedicineDetailScreen() {
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
         <Text style={styles.navTitle}>Medicine Details</Text>
-        <View style={{ width: 36 }} />
+        <TouchableOpacity onPress={() => router.push(`/medicine/edit?id=${id}` as any)} style={styles.editBtn}>
+          <Text style={styles.editBtnText}>Edit</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -324,4 +326,6 @@ const styles = StyleSheet.create({
   removeIcon: { fontSize: 16 },
   removeText: { color: Colors.white, fontSize: 15, fontWeight: '600' },
   removeWarning: { textAlign: 'center', fontSize: 12, color: Colors.textSecondary, lineHeight: 18 },
+  editBtn: { paddingHorizontal: 4, paddingVertical: 4 },
+  editBtnText: { fontSize: 16, color: Colors.primary, fontWeight: '600' },
 });
