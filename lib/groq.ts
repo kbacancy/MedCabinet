@@ -3,6 +3,39 @@ import type { Interaction } from './interactions';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
+const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
+
+export async function suggestCategory(medicineName: string): Promise<string | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+  if (!apiKey || apiKey === 'your_groq_api_key_here' || medicineName.trim().length < 3) return null;
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{
+          role: 'user',
+          content: `You are a pharmacist. Which category does the medicine "${medicineName}" belong to?\nChoose ONLY one from this exact list: ${CATEGORIES.join(', ')}.\nRespond with ONLY the category name, nothing else.`,
+        }],
+        temperature: 0,
+        max_tokens: 16,
+      }),
+    });
+
+    if (!response.ok) return null;
+    const json = await response.json();
+    const raw = (json.choices?.[0]?.message?.content ?? '').trim();
+    return CATEGORIES.find(c => raw.toLowerCase().includes(c.toLowerCase())) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function checkInteractionsAI(medicineNames: string[]): Promise<Interaction[]> {
   const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
   if (!apiKey || apiKey === 'your_groq_api_key_here' || medicineNames.length < 2) return [];

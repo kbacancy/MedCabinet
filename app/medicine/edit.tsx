@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, StatusBar, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -9,6 +9,7 @@ import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { scheduleMedicineNotifications } from '../../lib/notifications';
 import { KeyboardDoneBar } from '../../components/KeyboardDoneBar';
+import { suggestCategory } from '../../lib/groq';
 
 const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
 const NUMPAD_ACCESSORY_ID = 'edit-numpad-done-toolbar';
@@ -25,6 +26,23 @@ export default function EditMedicineScreen() {
   const [refillAt, setRefillAt] = useState('5');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [aiSuggesting, setAiSuggesting] = useState(false);
+  const [aiSuggestedCategory, setAiSuggestedCategory] = useState<string | null>(null);
+  const isInitialLoad = useRef(true);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isInitialLoad.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (name.trim().length < 3) { setAiSuggestedCategory(null); return; }
+    setAiSuggesting(true);
+    debounceRef.current = setTimeout(async () => {
+      const suggestion = await suggestCategory(name);
+      if (suggestion) { setCategory(suggestion); setAiSuggestedCategory(suggestion); }
+      setAiSuggesting(false);
+    }, 700);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [name]);
 
   useEffect(() => {
     if (!id) return;
@@ -38,6 +56,7 @@ export default function EditMedicineScreen() {
         setRefillAt(String(data.refill_alert_at ?? 5));
       }
       setLoading(false);
+      isInitialLoad.current = false;
     });
   }, [id]);
 
@@ -159,13 +178,30 @@ export default function EditMedicineScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Category</Text>
+              <View style={styles.categoryLabelRow}>
+                <Text style={styles.label}>Category</Text>
+                {aiSuggesting && (
+                  <View style={styles.aiBadge}>
+                    <ActivityIndicator size={10} color={Colors.primary} />
+                    <Text style={styles.aiBadgeText}>AI suggesting...</Text>
+                  </View>
+                )}
+                {!aiSuggesting && aiSuggestedCategory && (
+                  <View style={styles.aiBadge}>
+                    <Text style={styles.aiBadgeText}>⚡ AI suggested</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.chipsWrap}>
                 {CATEGORIES.map(cat => (
                   <TouchableOpacity
                     key={cat}
-                    style={[styles.chip, category === cat && styles.chipSelected]}
-                    onPress={() => setCategory(cat)}
+                    style={[
+                      styles.chip,
+                      category === cat && styles.chipSelected,
+                      category === cat && aiSuggestedCategory === cat && styles.chipAI,
+                    ]}
+                    onPress={() => { setCategory(cat); setAiSuggestedCategory(null); }}
                     activeOpacity={0.8}
                   >
                     <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
@@ -247,6 +283,14 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
   chipTextSelected: { color: Colors.white },
+  chipAI: { borderWidth: 2, borderColor: Colors.primary },
+  categoryLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  aiBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.primaryLight, borderRadius: 20,
+    paddingVertical: 2, paddingHorizontal: 8,
+  },
+  aiBadgeText: { fontSize: 11, color: Colors.primary, fontWeight: '600' },
   footer: {
     flexDirection: 'row', gap: 12, paddingHorizontal: 16,
     paddingVertical: 16, backgroundColor: Colors.background,
