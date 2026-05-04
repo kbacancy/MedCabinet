@@ -7,6 +7,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { KeyboardDoneBar } from '../../components/KeyboardDoneBar';
 
 const NUMPAD_ACCESSORY_ID = 'otp-numpad-done';
 
@@ -56,6 +57,7 @@ export default function OTPScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
+        <KeyboardDoneBar />
         <StatusBar barStyle="dark-content" backgroundColor={Colors.surfaceAlt} />
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backArrow}>←</Text>

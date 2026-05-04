@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { scheduleMedicineNotifications } from '../../lib/notifications';
+import { KeyboardDoneBar } from '../../components/KeyboardDoneBar';
 
 const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
 const NUMPAD_ACCESSORY_ID = 'numpad-done-toolbar';
@@ -58,6 +59,7 @@ export default function AddMedicineScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.container}>
+          <KeyboardDoneBar />
           <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
           <View style={styles.navbar}>

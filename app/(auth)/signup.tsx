@@ -7,6 +7,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
+import { KeyboardDoneBar } from '../../components/KeyboardDoneBar';
 
 const PHONE_ACCESSORY_ID = 'phone-pad-done';
 
@@ -57,6 +58,7 @@ export default function SignupScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardDoneBar />
         <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <StatusBar barStyle="dark-content" backgroundColor={Colors.surfaceAlt} />
 
