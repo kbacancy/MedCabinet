@@ -11,21 +11,26 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#EDF4F1"
+      "backgroundColor": "#1D9E75"
     },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Used to scan medicine barcodes",
-        "NSPhotoLibraryUsageDescription": "Used to pick medicine photos"
+        "NSPhotoLibraryUsageDescription": "Used to pick medicine photos",
+        "NSSpeechRecognitionUsageDescription": "Used to enter medicine names and dosages by voice",
+        "NSMicrophoneUsageDescription": "Used for voice-to-text input in medicine forms"
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#EDF4F1"
+        "backgroundColor": "#1D9E75"
       },
-      "permissions": ["CAMERA"],
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ],
       "edgeToEdgeEnabled": false
     },
     "web": {
@@ -45,6 +50,14 @@
         {
           "icon": "./assets/icon.png",
           "color": "#1D9E75"
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow MedCabinet to use the microphone for voice input.",
+          "speechRecognitionPermission": "Allow MedCabinet to use speech recognition for voice-to-text."
         }
       ]
     ]

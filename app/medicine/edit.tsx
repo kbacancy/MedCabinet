@@ -2,17 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, StatusBar, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Keyboard, TouchableWithoutFeedback, InputAccessoryView,
+  Keyboard,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { scheduleMedicineNotifications } from '../../lib/notifications';
-import { KeyboardDoneBar } from '../../components/KeyboardDoneBar';
+import { SmartKeyboardBar } from '../../components/SmartKeyboardBar';
+import type { FocusedField } from '../../components/SmartKeyboardBar';
 import { suggestCategory } from '../../lib/groq';
 
 const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
-const NUMPAD_ACCESSORY_ID = 'edit-numpad-done-toolbar';
+const BAR_ID = 'edit-smart-bar';
 
 export default function EditMedicineScreen() {
   const router = useRouter();
@@ -28,6 +30,8 @@ export default function EditMedicineScreen() {
   const [saving, setSaving] = useState(false);
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [aiSuggestedCategory, setAiSuggestedCategory] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [focusedField, setFocusedField] = useState<FocusedField>(null);
   const isInitialLoad = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,12 +84,26 @@ export default function EditMedicineScreen() {
     }
   };
 
-  const formatExpiryInput = (text: string) => {
-    const digits = text.replace(/\D/g, '');
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  const handleDateChange = (_: any, date?: Date) => {
+    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (date) {
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      const yyyy = date.getFullYear();
+      setExpiryDate(`${mm}/${dd}/${yyyy}`);
+    }
   };
+
+  const parseStoredDate = (): Date => {
+    if (!expiryDate) return new Date();
+    const [mm, dd, yyyy] = expiryDate.split('/');
+    if (mm && dd && yyyy && yyyy.length === 4) {
+      return new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+    }
+    return new Date();
+  };
+
+  const barId = Platform.OS === 'ios' ? BAR_ID : undefined;
 
   if (loading) {
     return (
@@ -96,41 +114,42 @@ export default function EditMedicineScreen() {
   }
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.container}>
-          <KeyboardDoneBar />
-          <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-          <View style={styles.navbar}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <Text style={styles.backArrow}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.navTitle}>Edit Medicine</Text>
-            <View style={{ width: 36 }} />
-          </View>
+      <View style={styles.navbar}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>Edit Medicine</Text>
+        <View style={{ width: 36 }} />
+      </View>
 
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-          >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          showsVerticalScrollIndicator={false}
+        >
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Medicine Name</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.inputFlex}
-                  placeholder="e.g. Paracetamol"
-                  placeholderTextColor={Colors.textMuted}
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                />
-                <Text style={styles.inputAddon}>🏥</Text>
-              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Paracetamol"
+                placeholderTextColor={Colors.textMuted}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                inputAccessoryViewID={barId}
+                onFocus={() => setFocusedField('name')}
+              />
             </View>
 
             <View style={styles.twoCol}>
@@ -144,6 +163,8 @@ export default function EditMedicineScreen() {
                   onChangeText={setDosage}
                   returnKeyType="done"
                   onSubmitEditing={Keyboard.dismiss}
+                  inputAccessoryViewID={barId}
+                  onFocus={() => setFocusedField('dosage')}
                 />
               </View>
               <View style={[styles.fieldGroup, { flex: 1 }]}>
@@ -155,26 +176,43 @@ export default function EditMedicineScreen() {
                   value={quantity}
                   onChangeText={setQuantity}
                   keyboardType="number-pad"
-                  inputAccessoryViewID={Platform.OS === 'ios' ? NUMPAD_ACCESSORY_ID : undefined}
+                  inputAccessoryViewID={barId}
+                  onFocus={() => setFocusedField('quantity')}
                 />
               </View>
             </View>
 
+            {/* Expiry Date — native date picker */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Expiry Date</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.inputFlex}
-                  placeholder="mm/dd/yyyy"
-                  placeholderTextColor={Colors.textMuted}
-                  value={expiryDate}
-                  onChangeText={t => setExpiryDate(formatExpiryInput(t))}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  inputAccessoryViewID={Platform.OS === 'ios' ? NUMPAD_ACCESSORY_ID : undefined}
-                />
+              <TouchableOpacity
+                style={styles.inputRow}
+                onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.inputFlex, !expiryDate && { color: Colors.textMuted }]}>
+                  {expiryDate || 'mm/dd/yyyy'}
+                </Text>
                 <Text style={styles.inputAddon}>📅</Text>
-              </View>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <View style={styles.datePickerWrapper}>
+                  <DateTimePicker
+                    value={parseStoredDate()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={handleDateChange}
+                  />
+                  {Platform.OS === 'ios' && (
+                    <TouchableOpacity
+                      style={styles.datePickerDone}
+                      onPress={() => setShowDatePicker(false)}
+                    >
+                      <Text style={styles.datePickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
 
             <View style={styles.fieldGroup}>
@@ -219,34 +257,35 @@ export default function EditMedicineScreen() {
                 value={refillAt}
                 onChangeText={setRefillAt}
                 keyboardType="number-pad"
-                inputAccessoryViewID={Platform.OS === 'ios' ? NUMPAD_ACCESSORY_ID : undefined}
+                inputAccessoryViewID={barId}
+                onFocus={() => setFocusedField('refill')}
               />
             </View>
 
             <View style={{ height: 20 }} />
-          </ScrollView>
+        </ScrollView>
 
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} activeOpacity={0.8}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
-              {saving ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.saveText}>Save Changes</Text>}
-            </TouchableOpacity>
-          </View>
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} activeOpacity={0.8}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
+            {saving ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.saveText}>Save Changes</Text>}
+          </TouchableOpacity>
         </View>
-
-        {Platform.OS === 'ios' && (
-          <InputAccessoryView nativeID={NUMPAD_ACCESSORY_ID}>
-            <View style={styles.keyboardAccessory}>
-              <TouchableOpacity onPress={Keyboard.dismiss} style={styles.doneButton}>
-                <Text style={styles.doneText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </InputAccessoryView>
-        )}
       </KeyboardAvoidingView>
-    </TouchableWithoutFeedback>
+
+      <SmartKeyboardBar
+        nativeID={BAR_ID}
+        focusedField={focusedField}
+        dosage={dosage}
+        quantity={quantity}
+        refill={refillAt}
+        onDosageChange={setDosage}
+        onQuantityChange={setQuantity}
+        onRefillChange={setRefillAt}
+      />
+    </View>
   );
 }
 
@@ -275,6 +314,14 @@ const styles = StyleSheet.create({
   inputFlex: { flex: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: Colors.textPrimary },
   inputAddon: { paddingHorizontal: 14, fontSize: 18 },
   twoCol: { flexDirection: 'row', gap: 12 },
+  datePickerWrapper: {
+    marginTop: 4, backgroundColor: Colors.inputBg, borderRadius: 10, overflow: 'hidden',
+  },
+  datePickerDone: {
+    alignItems: 'flex-end', padding: 12,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border,
+  },
+  datePickerDoneText: { fontSize: 16, color: Colors.primary, fontWeight: '600' },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14,
@@ -307,11 +354,4 @@ const styles = StyleSheet.create({
     alignItems: 'center', backgroundColor: Colors.primary,
   },
   saveText: { fontSize: 15, color: Colors.white, fontWeight: '600' },
-  keyboardAccessory: {
-    flexDirection: 'row', justifyContent: 'flex-end',
-    paddingHorizontal: 16, paddingVertical: 8,
-    backgroundColor: '#f1f1f1', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#c7c7cc',
-  },
-  doneButton: { paddingHorizontal: 4, paddingVertical: 4 },
-  doneText: { fontSize: 17, color: '#007AFF', fontWeight: '600' },
 });

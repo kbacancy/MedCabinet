@@ -200,8 +200,8 @@ export default function MedicineDetailScreen() {
         {interactions.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Cabinet Interactions</Text>
-            {interactions.map(item => (
-              <View key={item.name} style={[styles.interactionCard, item.safe ? styles.interactionSafe : styles.interactionAlert]}>
+            {interactions.map((item, i) => (
+              <View key={`${item.name}-${i}`} style={[styles.interactionCard, item.safe ? styles.interactionSafe : styles.interactionAlert]}>
                 <View style={[styles.interactionIconBox, item.safe ? styles.iconBoxSafe : styles.iconBoxAlert]}>
                   <Text style={styles.interactionIconEmoji}>{item.safe ? '✅' : '⚠️'}</Text>
                 </View>

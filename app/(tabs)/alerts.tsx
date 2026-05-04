@@ -95,6 +95,7 @@ export default function AlertsScreen() {
                   </View>
                 </View>
                 <Text style={styles.interactionDesc}>{item.message}</Text>
+                <Text style={styles.consultNote}>🩺 Consult your doctor before taking this combination.</Text>
                 <Text style={styles.aiPoweredText}>⚡ AI-powered analysis</Text>
               </View>
             </View>
@@ -240,5 +241,9 @@ const styles = StyleSheet.create({
   severityBadge: { backgroundColor: '#FFF3E0', borderRadius: 6, paddingVertical: 2, paddingHorizontal: 7 },
   severityHigh: { backgroundColor: Colors.dangerLight },
   severityText: { fontSize: 10, fontWeight: '700', color: Colors.danger },
-  aiPoweredText: { fontSize: 11, color: Colors.textMuted, marginTop: 6 },
+  consultNote: {
+    fontSize: 12, fontWeight: '600', color: Colors.danger,
+    opacity: 0.85, marginTop: 6, marginBottom: 2,
+  },
+  aiPoweredText: { fontSize: 11, color: Colors.textMuted, marginTop: 2 },
 });
