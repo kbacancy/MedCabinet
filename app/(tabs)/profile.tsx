@@ -38,16 +38,17 @@ export default function ProfileScreen() {
   const [expiryAlerts, setExpiryAlertsState] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setUserEmail(data.user.email ?? '');
-        const meta = data.user.user_metadata;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserEmail(session.user.email ?? '');
+        const meta = session.user.user_metadata;
         if (meta?.full_name) setUserName(meta.full_name);
-        if (meta?.avatar_url) setAvatarUrl(meta.avatar_url);
+        setAvatarUrl(meta?.avatar_url ?? null);
       }
     });
     areNotificationsEnabled().then(setNotificationsState);
     areExpiryAlertsEnabled().then(setExpiryAlertsState);
+    return () => subscription.unsubscribe();
   }, []);
 
   /* ── Avatar upload ─────────────────────────────────────── */
@@ -305,7 +306,7 @@ const styles = StyleSheet.create({
   avatarLarge: {
     width: 88, height: 88, borderRadius: 44,
     backgroundColor: Colors.inputBg, justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12, overflow: 'visible',
+    marginBottom: 12, overflow: 'hidden',
   },
   avatarImage: { width: 88, height: 88, borderRadius: 44 },
   avatarEmoji: { fontSize: 38 },

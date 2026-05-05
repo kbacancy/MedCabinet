@@ -44,12 +44,13 @@ export default function HomeScreen() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const meta = data.user?.user_metadata;
-      const name = meta?.full_name ?? data.user?.email ?? 'there';
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const meta = session?.user?.user_metadata;
+      const name = meta?.full_name ?? session?.user?.email ?? 'there';
       setUserName(name.split(' ')[0]);
-      if (meta?.avatar_url) setAvatarUrl(meta.avatar_url);
+      setAvatarUrl(meta?.avatar_url ?? null);
     });
+    return () => subscription.unsubscribe();
   }, []);
 
   const onRefresh = async () => {
