@@ -24,6 +24,14 @@ export type Medicine = {
   category: string;
   refill_alert_at: number;
   created_at: string;
+  // Prescription tracking
+  doctor_name?: string;
+  pharmacy?: string;
+  rx_number?: string;
+  notes?: string;
+  // Schedule
+  times_per_day?: number;
+  reminder_times?: string[];
 };
 
 export type Alert = {
@@ -33,5 +41,35 @@ export type Alert = {
   medicine_ids: string[];
   message: string;
   read: boolean;
+  created_at: string;
+};
+
+export type DoseLog = {
+  id: string;
+  user_id: string;
+  medicine_id: string;
+  taken_at: string;
+  date: string;
+};
+
+export type MedicalId = {
+  id?: string;
+  user_id?: string;
+  blood_type: string;
+  allergies: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  notes: string;
+  updated_at?: string;
+};
+
+export type Contact = {
+  id: string;
+  user_id: string;
+  name: string;
+  role: string;
+  phone: string;
+  address?: string;
+  notes?: string;
   created_at: string;
 };

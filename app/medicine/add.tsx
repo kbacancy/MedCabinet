@@ -16,6 +16,14 @@ import { suggestCategory } from '../../lib/groq';
 const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
 const BAR_ID = 'add-smart-bar';
 
+const REMINDER_SLOTS = [
+  { label: 'Morning', time: '08:00', emoji: '🌅' },
+  { label: 'Noon', time: '12:00', emoji: '☀️' },
+  { label: 'Afternoon', time: '15:00', emoji: '🌤' },
+  { label: 'Evening', time: '18:00', emoji: '🌇' },
+  { label: 'Night', time: '21:00', emoji: '🌙' },
+];
+
 export default function AddMedicineScreen() {
   const router = useRouter();
   const { barcode } = useLocalSearchParams<{ barcode?: string }>();
@@ -26,6 +34,14 @@ export default function AddMedicineScreen() {
   const [expiryDate, setExpiryDate] = useState('');
   const [category, setCategory] = useState('Pain Relief');
   const [refillAt, setRefillAt] = useState('5');
+  const [reminderTimes, setReminderTimes] = useState<string[]>(['08:00']);
+  // Prescription fields
+  const [doctorName, setDoctorName] = useState('');
+  const [pharmacy, setPharmacy] = useState('');
+  const [rxNumber, setRxNumber] = useState('');
+  const [notes, setNotes] = useState('');
+  const [showPrescription, setShowPrescription] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [aiSuggestedCategory, setAiSuggestedCategory] = useState<string | null>(null);
@@ -48,8 +64,15 @@ export default function AddMedicineScreen() {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [name]);
 
+  const toggleReminderTime = (time: string) => {
+    setReminderTimes(prev =>
+      prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time].sort()
+    );
+  };
+
   const handleSave = async () => {
     if (!name.trim()) { Alert.alert('Error', 'Medicine name is required.'); return; }
+    if (reminderTimes.length === 0) { Alert.alert('Error', 'Select at least one reminder time.'); return; }
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -67,10 +90,7 @@ export default function AddMedicineScreen() {
         `"${existing.name}" is already in your cabinet. Would you like to edit it instead?`,
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Edit',
-            onPress: () => router.replace(`/medicine/edit?id=${existing.id}` as any),
-          },
+          { text: 'Edit', onPress: () => router.replace(`/medicine/edit?id=${existing.id}` as any) },
         ]
       );
       return;
@@ -84,6 +104,12 @@ export default function AddMedicineScreen() {
       expiry_date: expiryDate,
       category,
       refill_alert_at: parseInt(refillAt) || 5,
+      times_per_day: reminderTimes.length,
+      reminder_times: reminderTimes,
+      doctor_name: doctorName.trim() || null,
+      pharmacy: pharmacy.trim() || null,
+      rx_number: rxNumber.trim() || null,
+      notes: notes.trim() || null,
     }).select();
     setLoading(false);
     if (error) {
@@ -130,10 +156,7 @@ export default function AddMedicineScreen() {
         </View>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={styles.content}
@@ -141,147 +164,231 @@ export default function AddMedicineScreen() {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           showsVerticalScrollIndicator={false}
         >
-            <TouchableOpacity
-              style={styles.scanBanner}
-              onPress={() => router.push('/scan' as any)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.scanIconCircle}>
-                <Text style={styles.scanIcon}>⬛</Text>
-              </View>
-              <Text style={styles.scanTitle}>Scan Barcode</Text>
-              <Text style={styles.scanSubtitle}>Instantly add medicine details</Text>
-              {barcode ? <Text style={styles.barcodeFound}>Scanned: {barcode}</Text> : null}
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.scanBanner}
+            onPress={() => router.push('/scan' as any)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.scanIconCircle}>
+              <Text style={styles.scanIcon}>⬛</Text>
+            </View>
+            <Text style={styles.scanTitle}>Scan Barcode</Text>
+            <Text style={styles.scanSubtitle}>Instantly add medicine details</Text>
+            {barcode ? <Text style={styles.barcodeFound}>Scanned: {barcode}</Text> : null}
+          </TouchableOpacity>
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Medicine Name</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Medicine Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Paracetamol"
+              placeholderTextColor={Colors.textMuted}
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+              inputAccessoryViewID={barId}
+              onFocus={() => setFocusedField('name')}
+            />
+          </View>
+
+          <View style={styles.twoCol}>
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={styles.label}>Dosage</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Paracetamol"
+                placeholder="e.g. 500mg"
                 placeholderTextColor={Colors.textMuted}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
+                value={dosage}
+                onChangeText={setDosage}
                 returnKeyType="done"
                 onSubmitEditing={Keyboard.dismiss}
                 inputAccessoryViewID={barId}
-                onFocus={() => setFocusedField('name')}
+                onFocus={() => setFocusedField('dosage')}
               />
             </View>
-
-            <View style={styles.twoCol}>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={styles.label}>Dosage</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. 500mg"
-                  placeholderTextColor={Colors.textMuted}
-                  value={dosage}
-                  onChangeText={setDosage}
-                  returnKeyType="done"
-                  onSubmitEditing={Keyboard.dismiss}
-                  inputAccessoryViewID={barId}
-                  onFocus={() => setFocusedField('dosage')}
-                />
-              </View>
-              <View style={[styles.fieldGroup, { flex: 1 }]}>
-                <Text style={styles.label}>Quantity</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="0"
-                  placeholderTextColor={Colors.textMuted}
-                  value={quantity}
-                  onChangeText={setQuantity}
-                  keyboardType="number-pad"
-                  inputAccessoryViewID={barId}
-                  onFocus={() => setFocusedField('quantity')}
-                />
-              </View>
+            <View style={[styles.fieldGroup, { flex: 1 }]}>
+              <Text style={styles.label}>Quantity</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0"
+                placeholderTextColor={Colors.textMuted}
+                value={quantity}
+                onChangeText={setQuantity}
+                keyboardType="number-pad"
+                inputAccessoryViewID={barId}
+                onFocus={() => setFocusedField('quantity')}
+              />
             </View>
+          </View>
 
-            {/* Expiry Date — native date picker */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Expiry Date</Text>
-              <TouchableOpacity
-                style={styles.inputRow}
-                onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.inputFlex, !expiryDate && { color: Colors.textMuted }]}>
-                  {expiryDate || 'mm/dd/yyyy'}
-                </Text>
-                <Text style={styles.inputAddon}>📅</Text>
-              </TouchableOpacity>
-              {showDatePicker && (
-                <View style={styles.datePickerWrapper}>
-                  <DateTimePicker
-                    value={parseStoredDate()}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={handleDateChange}
-                  />
-                  {Platform.OS === 'ios' && (
-                    <TouchableOpacity
-                      style={styles.datePickerDone}
-                      onPress={() => setShowDatePicker(false)}
-                    >
-                      <Text style={styles.datePickerDoneText}>Done</Text>
-                    </TouchableOpacity>
-                  )}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Expiry Date</Text>
+            <TouchableOpacity
+              style={styles.inputRow}
+              onPress={() => { Keyboard.dismiss(); setShowDatePicker(true); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.inputFlex, !expiryDate && { color: Colors.textMuted }]}>
+                {expiryDate || 'mm/dd/yyyy'}
+              </Text>
+              <Text style={styles.inputAddon}>📅</Text>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <View style={styles.datePickerWrapper}>
+                <DateTimePicker
+                  value={parseStoredDate()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                />
+                {Platform.OS === 'ios' && (
+                  <TouchableOpacity style={styles.datePickerDone} onPress={() => setShowDatePicker(false)}>
+                    <Text style={styles.datePickerDoneText}>Done</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <View style={styles.categoryLabelRow}>
+              <Text style={styles.label}>Category</Text>
+              {aiSuggesting && (
+                <View style={styles.aiBadge}>
+                  <ActivityIndicator size={10} color={Colors.primary} />
+                  <Text style={styles.aiBadgeText}>AI suggesting...</Text>
+                </View>
+              )}
+              {!aiSuggesting && aiSuggestedCategory && (
+                <View style={styles.aiBadge}>
+                  <Text style={styles.aiBadgeText}>⚡ AI suggested</Text>
                 </View>
               )}
             </View>
+            <View style={styles.chipsWrap}>
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.chip,
+                    category === cat && styles.chipSelected,
+                    category === cat && aiSuggestedCategory === cat && styles.chipAI,
+                  ]}
+                  onPress={() => { setCategory(cat); setAiSuggestedCategory(null); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
-            <View style={styles.fieldGroup}>
-              <View style={styles.categoryLabelRow}>
-                <Text style={styles.label}>Category</Text>
-                {aiSuggesting && (
-                  <View style={styles.aiBadge}>
-                    <ActivityIndicator size={10} color={Colors.primary} />
-                    <Text style={styles.aiBadgeText}>AI suggesting...</Text>
-                  </View>
-                )}
-                {!aiSuggesting && aiSuggestedCategory && (
-                  <View style={styles.aiBadge}>
-                    <Text style={styles.aiBadgeText}>⚡ AI suggested</Text>
-                  </View>
-                )}
+          {/* Reminder Times */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Reminder Times</Text>
+            <Text style={styles.subLabel}>Select all times you take this medicine</Text>
+            <View style={styles.chipsWrap}>
+              {REMINDER_SLOTS.map(slot => (
+                <TouchableOpacity
+                  key={slot.time}
+                  style={[styles.chip, reminderTimes.includes(slot.time) && styles.chipSelected]}
+                  onPress={() => toggleReminderTime(slot.time)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.chipText, reminderTimes.includes(slot.time) && styles.chipTextSelected]}>
+                    {slot.emoji} {slot.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Refill Alert (tablets remaining)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="5"
+              placeholderTextColor={Colors.textMuted}
+              value={refillAt}
+              onChangeText={setRefillAt}
+              keyboardType="number-pad"
+              inputAccessoryViewID={barId}
+              onFocus={() => setFocusedField('refill')}
+            />
+          </View>
+
+          {/* Prescription Info (collapsible) */}
+          <TouchableOpacity
+            style={styles.sectionToggle}
+            onPress={() => setShowPrescription(!showPrescription)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.sectionToggleText}>Prescription Info (optional)</Text>
+            <Text style={styles.sectionToggleArrow}>{showPrescription ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+
+          {showPrescription && (
+            <View style={styles.prescriptionSection}>
+              <View style={styles.twoCol}>
+                <View style={[styles.fieldGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Doctor</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Dr. Smith"
+                    placeholderTextColor={Colors.textMuted}
+                    value={doctorName}
+                    onChangeText={setDoctorName}
+                    autoCapitalize="words"
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                </View>
+                <View style={[styles.fieldGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Rx Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="RX-12345"
+                    placeholderTextColor={Colors.textMuted}
+                    value={rxNumber}
+                    onChangeText={setRxNumber}
+                    autoCapitalize="characters"
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+                </View>
               </View>
-              <View style={styles.chipsWrap}>
-                {CATEGORIES.map(cat => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[
-                      styles.chip,
-                      category === cat && styles.chipSelected,
-                      category === cat && aiSuggestedCategory === cat && styles.chipAI,
-                    ]}
-                    onPress={() => { setCategory(cat); setAiSuggestedCategory(null); }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.chipText, category === cat && styles.chipTextSelected]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Pharmacy</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="CVS, Walgreens..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={pharmacy}
+                  onChangeText={setPharmacy}
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>Notes</Text>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  placeholder="Take with food, avoid alcohol..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={notes}
+                  onChangeText={setNotes}
+                  multiline
+                  numberOfLines={3}
+                />
               </View>
             </View>
+          )}
 
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Refill Alert (tablets remaining)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="5"
-                placeholderTextColor={Colors.textMuted}
-                value={refillAt}
-                onChangeText={setRefillAt}
-                keyboardType="number-pad"
-                inputAccessoryViewID={barId}
-                onFocus={() => setFocusedField('refill')}
-              />
-            </View>
-
-            <View style={{ height: 20 }} />
-          </ScrollView>
+          <View style={{ height: 20 }} />
+        </ScrollView>
 
         <View style={styles.footer}>
           <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} activeOpacity={0.8}>
@@ -337,10 +444,12 @@ const styles = StyleSheet.create({
   barcodeFound: { marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.7)', fontFamily: 'monospace' },
   fieldGroup: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary, marginBottom: 6 },
+  subLabel: { fontSize: 12, color: Colors.textSecondary, marginBottom: 8, marginTop: -4 },
   input: {
     backgroundColor: Colors.inputBg, borderRadius: 10,
     paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: Colors.textPrimary,
   },
+  inputMultiline: { height: 80, textAlignVertical: 'top' },
   inputRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.inputBg, borderRadius: 10,
@@ -372,6 +481,17 @@ const styles = StyleSheet.create({
     paddingVertical: 2, paddingHorizontal: 8,
   },
   aiBadgeText: { fontSize: 11, color: Colors.primary, fontWeight: '600' },
+  sectionToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.inputBg, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 13, marginBottom: 12,
+  },
+  sectionToggleText: { fontSize: 14, fontWeight: '500', color: Colors.primary },
+  sectionToggleArrow: { fontSize: 12, color: Colors.textMuted },
+  prescriptionSection: {
+    backgroundColor: Colors.white, borderRadius: 12, padding: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: Colors.borderLight,
+  },
   footer: {
     flexDirection: 'row', gap: 12, paddingHorizontal: 16,
     paddingVertical: 16, backgroundColor: Colors.background,

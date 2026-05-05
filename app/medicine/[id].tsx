@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { Medicine, daysUntilExpiry } from '../../hooks/useMedicines';
+import { useTodayDoseLogs } from '../../hooks/useDoseLogs';
 import { checkInteractionsForOne } from '../../lib/interactions';
 import { cancelMedicineNotifications } from '../../lib/notifications';
 
@@ -19,9 +20,27 @@ function ProgressBar({ value, total }: { value: number; total: number }) {
   );
 }
 
+function InfoRow({ label, value }: { label: string; value: string }) {
+  if (!value) return null;
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoRowLabel}>{label}</Text>
+      <Text style={styles.infoRowValue}>{value}</Text>
+    </View>
+  );
+}
+
+function formatTime(t: string): string {
+  const [h, m] = t.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 export default function MedicineDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { isTaken, markTaken, unmarkTaken } = useTodayDoseLogs();
 
   const [med, setMed] = useState<Medicine | null>(null);
   const [otherMeds, setOtherMeds] = useState<string[]>([]);
@@ -107,6 +126,7 @@ export default function MedicineDetailScreen() {
 
   const daysLeft = daysUntilExpiry(med.expiry_date);
   const interactions = checkInteractionsForOne(med.name, otherMeds);
+  const taken = isTaken(med.id);
 
   const formatExpiry = (dateStr: string) => {
     if (!dateStr) return 'N/A';
@@ -125,6 +145,8 @@ export default function MedicineDetailScreen() {
   };
 
   const { text: expiryText, color: expiryColor } = expiryStatus();
+  const hasPrescriptionInfo = med.doctor_name || med.pharmacy || med.rx_number || med.notes;
+  const reminderTimes = med.reminder_times ?? ['09:00'];
 
   return (
     <View style={styles.container}>
@@ -156,6 +178,28 @@ export default function MedicineDetailScreen() {
             <Text style={styles.medIcon}>💊</Text>
           </View>
         </View>
+
+        {/* Today's dose — mark taken */}
+        <TouchableOpacity
+          style={[styles.takeCard, taken && styles.takeCardTaken]}
+          onPress={() => taken ? unmarkTaken(med.id) : markTaken(med.id)}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.takeCircle, taken && styles.takeCircleTaken]}>
+            <Text style={styles.takeCircleIcon}>{taken ? '✓' : '○'}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.takeTodayTitle, taken && styles.takeTodayTitleTaken]}>
+              {taken ? 'Taken today' : "Mark today's dose"}
+            </Text>
+            <Text style={styles.takeTodaySubtitle}>
+              {reminderTimes.map(formatTime).join(' · ')}
+            </Text>
+          </View>
+          <Text style={[styles.takeAction, taken && styles.takeActionTaken]}>
+            {taken ? 'Undo' : 'Take'}
+          </Text>
+        </TouchableOpacity>
 
         <View style={styles.infoCard}>
           <View style={styles.infoCol}>
@@ -196,6 +240,24 @@ export default function MedicineDetailScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Prescription Info */}
+        {hasPrescriptionInfo && (
+          <>
+            <Text style={styles.sectionTitle}>Prescription Info</Text>
+            <View style={styles.prescriptionCard}>
+              <InfoRow label="Doctor" value={med.doctor_name ?? ''} />
+              <InfoRow label="Pharmacy" value={med.pharmacy ?? ''} />
+              <InfoRow label="Rx Number" value={med.rx_number ?? ''} />
+              {med.notes ? (
+                <View style={[styles.infoRow, { flexDirection: 'column', gap: 4 }]}>
+                  <Text style={styles.infoRowLabel}>Notes</Text>
+                  <Text style={[styles.infoRowValue, { fontSize: 13, lineHeight: 18 }]}>{med.notes}</Text>
+                </View>
+              ) : null}
+            </View>
+          </>
+        )}
 
         {interactions.length > 0 && (
           <>
@@ -266,6 +328,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight, justifyContent: 'center', alignItems: 'center',
   },
   medIcon: { fontSize: 26 },
+  takeCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: Colors.primaryLight, borderRadius: 14, padding: 14,
+    marginBottom: 16, borderWidth: 1.5, borderColor: Colors.primary,
+  },
+  takeCardTaken: { backgroundColor: Colors.surface, borderColor: Colors.border },
+  takeCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: Colors.primary,
+  },
+  takeCircleTaken: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  takeCircleIcon: { fontSize: 16, color: Colors.primary },
+  takeTodayTitle: { fontSize: 14, fontWeight: '600', color: Colors.primary, marginBottom: 2 },
+  takeTodayTitleTaken: { color: Colors.textSecondary },
+  takeTodaySubtitle: { fontSize: 12, color: Colors.textSecondary },
+  takeAction: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  takeActionTaken: { color: Colors.textMuted },
   infoCard: {
     backgroundColor: Colors.white, borderRadius: 14, padding: 16,
     flexDirection: 'row', marginBottom: 16,
@@ -301,6 +381,16 @@ const styles = StyleSheet.create({
   editRefill: {},
   editRefillText: { fontSize: 12, color: Colors.primary, fontWeight: '700' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
+  prescriptionCard: {
+    backgroundColor: Colors.white, borderRadius: 14, padding: 14, marginBottom: 20,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+    gap: 10,
+  },
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  infoRowLabel: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
+  infoRowValue: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, maxWidth: '60%', textAlign: 'right' },
   interactionCard: {
     flexDirection: 'row', borderRadius: 14, padding: 14, marginBottom: 10,
     borderWidth: 1, gap: 12,

@@ -58,6 +58,13 @@ export async function setExpiryAlertsEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(EXPIRY_ALERTS_ENABLED_KEY, String(enabled));
 }
 
+function formatTimeLabel(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 export async function scheduleMedicineNotifications(medicine: Medicine): Promise<void> {
   const enabled = await areNotificationsEnabled();
   if (!enabled) return;
@@ -67,24 +74,33 @@ export async function scheduleMedicineNotifications(medicine: Medicine): Promise
 
   await cancelMedicineNotifications(medicine.id);
 
-  // Daily reminder at 9 AM
-  await Notifications.scheduleNotificationAsync({
-    identifier: `reminder-${medicine.id}`,
-    content: {
-      title: `Time to take ${medicine.name}`,
-      body: medicine.dosage ? `Dosage: ${medicine.dosage}` : "Don't forget your medicine",
-      sound: 'default',
-      data: { medicineId: medicine.id, type: 'reminder' },
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.DAILY,
-      hour: 9,
-      minute: 0,
-      channelId: 'medicine-reminders',
-    },
-  });
+  // Schedule one reminder per reminder_time (defaults to 9:00 AM if not set)
+  const times: string[] = medicine.reminder_times?.length ? medicine.reminder_times : ['09:00'];
+  for (let i = 0; i < times.length; i++) {
+    const [hourStr, minuteStr] = times[i].split(':');
+    const hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr, 10);
+    const timeLabel = formatTimeLabel(times[i]);
+    await Notifications.scheduleNotificationAsync({
+      identifier: `reminder-${medicine.id}-${i}`,
+      content: {
+        title: `Time to take ${medicine.name}`,
+        body: medicine.dosage
+          ? `${medicine.dosage} at ${timeLabel}`
+          : `Scheduled for ${timeLabel}`,
+        sound: 'default',
+        data: { medicineId: medicine.id, type: 'reminder' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour,
+        minute,
+        channelId: 'medicine-reminders',
+      },
+    });
+  }
 
-  // Refill alert if quantity is already at or below threshold
+  // Refill alert if quantity is at or below threshold
   if (medicine.quantity > 0 && medicine.quantity <= medicine.refill_alert_at) {
     await Notifications.scheduleNotificationAsync({
       identifier: `refill-${medicine.id}`,
@@ -102,7 +118,7 @@ export async function scheduleMedicineNotifications(medicine: Medicine): Promise
     });
   }
 
-  // Expiry alert — notify 30 days before expiry
+  // Expiry alert — 30 days before expiry
   const expiryAlertsOn = await areExpiryAlertsEnabled();
   if (expiryAlertsOn && medicine.expiry_date) {
     const parts = medicine.expiry_date.split('/');
@@ -131,11 +147,19 @@ export async function scheduleMedicineNotifications(medicine: Medicine): Promise
 }
 
 export async function cancelMedicineNotifications(medicineId: string): Promise<void> {
-  await Promise.all([
+  const cancellations: Promise<void>[] = [
+    // Legacy single-reminder identifier
     Notifications.cancelScheduledNotificationAsync(`reminder-${medicineId}`).catch(() => {}),
     Notifications.cancelScheduledNotificationAsync(`refill-${medicineId}`).catch(() => {}),
     Notifications.cancelScheduledNotificationAsync(`expiry-${medicineId}`).catch(() => {}),
-  ]);
+  ];
+  // Time-indexed reminders (up to 8 slots)
+  for (let i = 0; i < 8; i++) {
+    cancellations.push(
+      Notifications.cancelScheduledNotificationAsync(`reminder-${medicineId}-${i}`).catch(() => {})
+    );
+  }
+  await Promise.all(cancellations);
 }
 
 export async function cancelAllNotifications(): Promise<void> {

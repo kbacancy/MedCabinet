@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, Alert, Switch,
+  StatusBar, Alert, Switch, Share,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import {
@@ -27,8 +28,9 @@ function SettingsRow({ emoji, label, onPress, value }: RowProps) {
 }
 
 export default function ProfileScreen() {
-  const [userName, setUserName] = useState('Arjun Sharma');
-  const [userEmail, setUserEmail] = useState('arjun@email.com');
+  const router = useRouter();
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   const [notifications, setNotificationsState] = useState(true);
   const [expiryAlerts, setExpiryAlertsState] = useState(true);
 
@@ -74,12 +76,50 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleExportCSV = async () => {
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return;
+    const { data: meds, error } = await supabase
+      .from('medicines')
+      .select('*')
+      .eq('user_id', authData.user.id)
+      .order('name');
+
+    if (error || !meds?.length) {
+      Alert.alert('Export', 'No medicines to export.');
+      return;
+    }
+
+    const header = 'Name,Dosage,Quantity,Expiry Date,Category,Doctor,Pharmacy,Rx Number,Notes';
+    const rows = (meds as Medicine[]).map(m =>
+      [
+        `"${m.name}"`,
+        `"${m.dosage ?? ''}"`,
+        m.quantity,
+        `"${m.expiry_date ?? ''}"`,
+        `"${m.category ?? ''}"`,
+        `"${m.doctor_name ?? ''}"`,
+        `"${m.pharmacy ?? ''}"`,
+        `"${m.rx_number ?? ''}"`,
+        `"${(m.notes ?? '').replace(/"/g, "'")}"`,
+      ].join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+
+    await Share.share({
+      message: csv,
+      title: 'MedCabinet Export',
+    });
+  };
+
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: () => supabase.auth.signOut() },
     ]);
   };
+
+  const displayName = userName || userEmail.split('@')[0] || 'User';
 
   return (
     <View style={styles.container}>
@@ -94,7 +134,7 @@ export default function ProfileScreen() {
           <View style={styles.avatarLarge}>
             <Text style={styles.avatarEmoji}>👤</Text>
           </View>
-          <Text style={styles.profileName}>{userName}</Text>
+          <Text style={styles.profileName}>{displayName}</Text>
           <Text style={styles.profileEmail}>{userEmail}</Text>
           <TouchableOpacity style={styles.editButton}>
             <Text style={styles.editButtonText}>Edit Profile</Text>
@@ -116,11 +156,30 @@ export default function ProfileScreen() {
           />
         </View>
 
+        <Text style={styles.sectionLabel}>Health</Text>
+        <View style={styles.card}>
+          <SettingsRow
+            emoji="🆘"
+            label="Medical ID"
+            onPress={() => router.push('/medical-id' as any)}
+          />
+          <View style={styles.divider} />
+          <SettingsRow
+            emoji="👨‍⚕️"
+            label="Doctors & Contacts"
+            onPress={() => router.push('/contacts' as any)}
+          />
+          <View style={styles.divider} />
+          <SettingsRow
+            emoji="📤"
+            label="Export Medicine List"
+            onPress={handleExportCSV}
+          />
+        </View>
+
         <Text style={styles.sectionLabel}>Account</Text>
         <View style={styles.card}>
           <SettingsRow emoji="👨‍👩‍👧‍👦" label="Family Members" onPress={() => Alert.alert('Coming Soon', 'Family sharing coming soon!')} />
-          <View style={styles.divider} />
-          <SettingsRow emoji="📋" label="Medical History" onPress={() => Alert.alert('Coming Soon')} />
           <View style={styles.divider} />
           <SettingsRow emoji="🔒" label="Privacy Settings" onPress={() => Alert.alert('Coming Soon')} />
         </View>

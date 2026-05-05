@@ -1,18 +1,27 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, RefreshControl, ActivityIndicator,
+  StatusBar, RefreshControl, ActivityIndicator, TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import { useMedicines, daysUntilExpiry } from '../../hooks/useMedicines';
+import { useTodayDoseLogs } from '../../hooks/useDoseLogs';
 import { checkInteractions } from '../../lib/interactions';
 import MedicineCard from '../../components/MedicineCard';
 import PlusIcon from '../../components/PlusIcon';
 
+const ALL_CATEGORIES = ['All', 'Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
+
+function formatTime(t: string): string {
+  const [h, m] = t.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
 function AdherenceRing({ percent }: { percent: number }) {
-  const strokeDeg = (percent / 100) * 270;
   return (
     <View style={styles.ringOuter}>
       <Text style={styles.ringPercent}>{percent}%</Text>
@@ -23,8 +32,11 @@ function AdherenceRing({ percent }: { percent: number }) {
 export default function HomeScreen() {
   const router = useRouter();
   const { medicines, loading, refetch } = useMedicines();
+  const { isTaken, markTaken, refetch: refetchLogs } = useTodayDoseLogs();
   const [userName, setUserName] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -38,13 +50,24 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), refetchLogs()]);
     setRefreshing(false);
   };
 
   const expiringSoon = medicines.filter(m => daysUntilExpiry(m.expiry_date) <= 30).length;
   const interactions = checkInteractions(medicines.map(m => m.name));
   const interactionCount = interactions.length;
+
+  // Real adherence: how many medicines taken today vs. total
+  const takenCount = medicines.filter(m => isTaken(m.id)).length;
+  const adherencePercent = medicines.length > 0 ? Math.round((takenCount / medicines.length) * 100) : 0;
+
+  // Filtered cabinet list
+  const filtered = medicines.filter(m => {
+    const matchSearch = m.name.toLowerCase().includes(search.toLowerCase().trim());
+    const matchCat = selectedCategory === 'All' || m.category === selectedCategory;
+    return matchSearch && matchCat;
+  });
 
   return (
     <View style={styles.container}>
@@ -59,12 +82,51 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Search bar — fixed below header */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search medicines..."
+            placeholderTextColor={Colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+        </View>
+      </View>
+
+      {/* Category chips — fixed below search */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryScroll}
+        contentContainerStyle={styles.categoryContent}
+      >
+        {ALL_CATEGORIES.map(cat => (
+          <TouchableOpacity
+            key={cat}
+            style={[styles.catChip, selectedCategory === cat && styles.catChipSelected]}
+            onPress={() => setSelectedCategory(cat)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.catChipText, selectedCategory === cat && styles.catChipTextSelected]}>
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>{medicines.length}</Text>
@@ -80,19 +142,64 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Adherence card */}
         <View style={styles.adherenceCard}>
           <View style={styles.adherenceLeft}>
             <Text style={styles.adherenceTitle}>Today's Adherence</Text>
-            <Text style={styles.adherenceSubtitle}>{medicines.length > 0 ? `${medicines.length} medicines in cabinet` : 'Add medicines to track'}</Text>
+            <Text style={styles.adherenceSubtitle}>
+              {medicines.length > 0
+                ? `${takenCount} of ${medicines.length} taken today`
+                : 'Add medicines to track'}
+            </Text>
           </View>
-          <AdherenceRing percent={medicines.length > 0 ? 75 : 0} />
+          <AdherenceRing percent={adherencePercent} />
         </View>
 
+        {/* Today's Doses */}
+        {medicines.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Today's Doses</Text>
+            <View style={styles.dosesCard}>
+              {medicines.map((med, i) => {
+                const taken = isTaken(med.id);
+                const firstTime = med.reminder_times?.[0] ?? '09:00';
+                return (
+                  <View key={med.id}>
+                    {i > 0 && <View style={styles.dosesDivider} />}
+                    <View style={styles.doseRow}>
+                      <View style={[styles.doseStatus, taken && styles.doseStatusTaken]}>
+                        <Text style={[styles.doseStatusIcon, taken && styles.doseStatusIconTaken]}>
+                          {taken ? '✓' : '○'}
+                        </Text>
+                      </View>
+                      <View style={styles.doseInfo}>
+                        <Text style={styles.doseName}>{med.name}</Text>
+                        <Text style={styles.doseTime}>{formatTime(firstTime)}{med.dosage ? ` · ${med.dosage}` : ''}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.takeBtn, taken && styles.takeBtnTaken]}
+                        onPress={() => markTaken(med.id)}
+                        disabled={taken}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.takeBtnText, taken && styles.takeBtnTextTaken]}>
+                          {taken ? 'Taken' : 'Take'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* Cabinet */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Your Cabinet</Text>
-          {medicines.length > 4 && (
-            <TouchableOpacity onPress={() => {}}>
-              <Text style={styles.viewAll}>View All</Text>
+          {filtered.length !== medicines.length && (
+            <TouchableOpacity onPress={() => { setSearch(''); setSelectedCategory('All'); }}>
+              <Text style={styles.clearFilter}>Clear filter</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -101,18 +208,27 @@ export default function HomeScreen() {
           <View style={styles.loadingBox}>
             <ActivityIndicator color={Colors.primary} size="large" />
           </View>
-        ) : medicines.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyEmoji}>💊</Text>
-            <Text style={styles.emptyTitle}>Your cabinet is empty</Text>
-            <Text style={styles.emptyDesc}>Tap the + button to add your first medicine.</Text>
-          </View>
+        ) : filtered.length === 0 ? (
+          medicines.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyEmoji}>💊</Text>
+              <Text style={styles.emptyTitle}>Your cabinet is empty</Text>
+              <Text style={styles.emptyDesc}>Tap the + button to add your first medicine.</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyEmoji}>🔍</Text>
+              <Text style={styles.emptyTitle}>No results</Text>
+              <Text style={styles.emptyDesc}>Try a different search or category.</Text>
+            </View>
+          )
         ) : (
-          medicines.map(med => (
+          filtered.map(med => (
             <MedicineCard
               key={med.id}
               medicine={{ ...med, daysLeft: daysUntilExpiry(med.expiry_date) }}
               onPress={() => router.push(`/medicine/${med.id}` as any)}
+              takenToday={isTaken(med.id)}
             />
           ))
         )}
@@ -131,7 +247,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.surface },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16,
+    paddingHorizontal: 20, paddingTop: 52, paddingBottom: 12,
     backgroundColor: Colors.background,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -141,6 +257,30 @@ const styles = StyleSheet.create({
   },
   avatarEmoji: { fontSize: 18 },
   greeting: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+  searchRow: {
+    paddingHorizontal: 16, paddingVertical: 10,
+    backgroundColor: Colors.background,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+  },
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.inputBg, borderRadius: 12,
+    paddingHorizontal: 12, height: 42,
+  },
+  searchIcon: { fontSize: 15, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 15, color: Colors.textPrimary },
+  categoryScroll: {
+    backgroundColor: Colors.background,
+    maxHeight: 52,
+  },
+  categoryContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, flexDirection: 'row' },
+  catChip: {
+    borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14,
+    backgroundColor: Colors.inputBg, borderWidth: 1, borderColor: Colors.border,
+  },
+  catChipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  catChipText: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary },
+  catChipTextSelected: { color: Colors.white },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
   statsRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
@@ -170,8 +310,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 12,
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  viewAll: { fontSize: 14, color: Colors.primary, fontWeight: '500' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
+  clearFilter: { fontSize: 13, color: Colors.primary, fontWeight: '500', marginBottom: 12 },
+  dosesCard: {
+    backgroundColor: Colors.white, borderRadius: 16, marginBottom: 24,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,
+    overflow: 'hidden',
+  },
+  dosesDivider: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 60 },
+  doseRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, paddingHorizontal: 14,
+  },
+  doseStatus: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: Colors.inputBg, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1.5, borderColor: Colors.border,
+  },
+  doseStatusTaken: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  doseStatusIcon: { fontSize: 14, color: Colors.textMuted },
+  doseStatusIconTaken: { color: Colors.white },
+  doseInfo: { flex: 1 },
+  doseName: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 2 },
+  doseTime: { fontSize: 12, color: Colors.textSecondary },
+  takeBtn: {
+    backgroundColor: Colors.primaryLight, borderRadius: 20,
+    paddingVertical: 6, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: Colors.primary,
+  },
+  takeBtnTaken: { backgroundColor: Colors.surface, borderColor: Colors.border },
+  takeBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  takeBtnTextTaken: { color: Colors.textSecondary },
   loadingBox: { paddingVertical: 48, alignItems: 'center' },
   emptyBox: { paddingVertical: 48, alignItems: 'center', gap: 8 },
   emptyEmoji: { fontSize: 48 },

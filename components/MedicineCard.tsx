@@ -13,6 +13,7 @@ type Medicine = {
 type Props = {
   medicine: Medicine;
   onPress: () => void;
+  takenToday?: boolean;
 };
 
 function getDaysLeftStyle(daysLeft: number) {
@@ -23,16 +24,17 @@ function getDaysLeftStyle(daysLeft: number) {
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   'Antibiotic': '🏥',
+  'Antibiotics': '🏥',
   'Blood Pressure': '💊',
   'Cholesterol': '💉',
-  'Diabetes': '⬛',
+  'Diabetes': '🩸',
   'Pain Relief': '🔴',
   'Supplements': '🟢',
   'Vitamins': '🟡',
   'Other': '💊',
 };
 
-export default function MedicineCard({ medicine, onPress }: Props) {
+export default function MedicineCard({ medicine, onPress, takenToday }: Props) {
   const badge = getDaysLeftStyle(medicine.daysLeft);
   const emoji = CATEGORY_EMOJIS[medicine.category] ?? '💊';
 
@@ -40,6 +42,11 @@ export default function MedicineCard({ medicine, onPress }: Props) {
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.iconBox}>
         <Text style={styles.iconEmoji}>{emoji}</Text>
+        {takenToday && (
+          <View style={styles.takenBadge}>
+            <Text style={styles.takenCheck}>✓</Text>
+          </View>
+        )}
       </View>
       <View style={styles.info}>
         <Text style={styles.name}>{medicine.name}</Text>
@@ -68,6 +75,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center',
   },
   iconEmoji: { fontSize: 22 },
+  takenBadge: {
+    position: 'absolute', bottom: -4, right: -4,
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1.5, borderColor: Colors.white,
+  },
+  takenCheck: { fontSize: 9, color: Colors.white, fontWeight: '700' },
   info: { flex: 1 },
   name: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary, marginBottom: 3 },
   meta: { fontSize: 12, color: Colors.textSecondary },

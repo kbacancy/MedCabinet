@@ -12,6 +12,12 @@ export type Medicine = {
   category: string;
   refill_alert_at: number;
   created_at: string;
+  doctor_name?: string;
+  pharmacy?: string;
+  rx_number?: string;
+  notes?: string;
+  times_per_day?: number;
+  reminder_times?: string[];
 };
 
 export function useMedicines() {
@@ -41,7 +47,6 @@ export function useMedicines() {
 
 export function daysUntilExpiry(expiryDate: string): number {
   if (!expiryDate) return 9999;
-  // Handle mm/dd/yyyy format explicitly for cross-platform compatibility
   let expiry: Date;
   const parts = expiryDate.split('/');
   if (parts.length === 3) {
