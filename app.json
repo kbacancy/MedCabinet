@@ -23,6 +23,7 @@
       }
     },
     "android": {
+      "package": "com.medcabinet.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1D9E75"
