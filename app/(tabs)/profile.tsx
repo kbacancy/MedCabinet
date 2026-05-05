@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, Alert, Switch, Share,
+  StatusBar, Alert, Switch, Share, Image, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
 import { supabase } from '../../lib/supabase';
 import {
@@ -31,6 +32,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [notifications, setNotificationsState] = useState(true);
   const [expiryAlerts, setExpiryAlertsState] = useState(true);
 
@@ -38,13 +41,105 @@ export default function ProfileScreen() {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setUserEmail(data.user.email ?? '');
-        const name = data.user.user_metadata?.full_name;
-        if (name) setUserName(name);
+        const meta = data.user.user_metadata;
+        if (meta?.full_name) setUserName(meta.full_name);
+        if (meta?.avatar_url) setAvatarUrl(meta.avatar_url);
       }
     });
     areNotificationsEnabled().then(setNotificationsState);
     areExpiryAlertsEnabled().then(setExpiryAlertsState);
   }, []);
+
+  /* ── Avatar upload ─────────────────────────────────────── */
+
+  const handleAvatarPress = () => {
+    const options: any[] = [
+      { text: 'Take Photo', onPress: () => pickImage('camera') },
+      { text: 'Choose from Library', onPress: () => pickImage('library') },
+    ];
+    if (avatarUrl) {
+      options.push({ text: 'Remove Photo', style: 'destructive', onPress: removeAvatar });
+    }
+    options.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert('Profile Photo', 'Choose an option', options);
+  };
+
+  const pickImage = async (source: 'camera' | 'library') => {
+    let result: ImagePicker.ImagePickerResult;
+
+    if (source === 'camera') {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Camera access is required to take a photo.');
+        return;
+      }
+      result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.75,
+      });
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Photo library access is required.');
+        return;
+      }
+      result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.75,
+      });
+    }
+
+    if (!result.canceled && result.assets[0]) {
+      await uploadAvatar(result.assets[0].uri);
+    }
+  };
+
+  const uploadAvatar = async (uri: string) => {
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const ext = uri.split('.').pop()?.toLowerCase().replace('jpg', 'jpeg') ?? 'jpeg';
+      const path = `${user.id}/avatar.${ext}`;
+      const mimeType = `image/${ext}`;
+
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { contentType: mimeType, upsert: true });
+
+      if (uploadError) {
+        Alert.alert('Upload failed', uploadError.message);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+      const url = `${publicUrl}?t=${Date.now()}`;
+
+      await supabase.auth.updateUser({ data: { avatar_url: url } });
+      setAvatarUrl(url);
+    } catch {
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    setUploading(true);
+    await supabase.auth.updateUser({ data: { avatar_url: null } });
+    setAvatarUrl(null);
+    setUploading(false);
+  };
+
+  /* ── Notification toggles ──────────────────────────────── */
 
   const handleNotificationsToggle = async (value: boolean) => {
     setNotificationsState(value);
@@ -54,10 +149,7 @@ export default function ProfileScreen() {
     } else {
       const { data } = await supabase.auth.getUser();
       if (data.user) {
-        const { data: meds } = await supabase
-          .from('medicines')
-          .select('*')
-          .eq('user_id', data.user.id);
+        const { data: meds } = await supabase.from('medicines').select('*').eq('user_id', data.user.id);
         if (meds) await rescheduleAllNotifications(meds as Medicine[]);
       }
     }
@@ -68,48 +160,26 @@ export default function ProfileScreen() {
     await setExpiryAlertsEnabled(value);
     const { data } = await supabase.auth.getUser();
     if (data.user) {
-      const { data: meds } = await supabase
-        .from('medicines')
-        .select('*')
-        .eq('user_id', data.user.id);
+      const { data: meds } = await supabase.from('medicines').select('*').eq('user_id', data.user.id);
       if (meds) await rescheduleAllNotifications(meds as Medicine[]);
     }
   };
+
+  /* ── Export CSV ────────────────────────────────────────── */
 
   const handleExportCSV = async () => {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) return;
     const { data: meds, error } = await supabase
-      .from('medicines')
-      .select('*')
-      .eq('user_id', authData.user.id)
-      .order('name');
-
-    if (error || !meds?.length) {
-      Alert.alert('Export', 'No medicines to export.');
-      return;
-    }
-
+      .from('medicines').select('*').eq('user_id', authData.user.id).order('name');
+    if (error || !meds?.length) { Alert.alert('Export', 'No medicines to export.'); return; }
     const header = 'Name,Dosage,Quantity,Expiry Date,Category,Doctor,Pharmacy,Rx Number,Notes';
     const rows = (meds as Medicine[]).map(m =>
-      [
-        `"${m.name}"`,
-        `"${m.dosage ?? ''}"`,
-        m.quantity,
-        `"${m.expiry_date ?? ''}"`,
-        `"${m.category ?? ''}"`,
-        `"${m.doctor_name ?? ''}"`,
-        `"${m.pharmacy ?? ''}"`,
-        `"${m.rx_number ?? ''}"`,
-        `"${(m.notes ?? '').replace(/"/g, "'")}"`,
-      ].join(',')
+      [`"${m.name}"`, `"${m.dosage ?? ''}"`, m.quantity, `"${m.expiry_date ?? ''}"`,
+        `"${m.category ?? ''}"`, `"${m.doctor_name ?? ''}"`, `"${m.pharmacy ?? ''}"`,
+        `"${m.rx_number ?? ''}"`, `"${(m.notes ?? '').replace(/"/g, "'")}"`].join(',')
     );
-    const csv = [header, ...rows].join('\n');
-
-    await Share.share({
-      message: csv,
-      title: 'MedCabinet Export',
-    });
+    await Share.share({ message: [header, ...rows].join('\n'), title: 'MedCabinet Export' });
   };
 
   const handleSignOut = () => {
@@ -131,55 +201,61 @@ export default function ProfileScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.profileCard}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarEmoji}>👤</Text>
-          </View>
+          {/* Tappable avatar with camera badge */}
+          <TouchableOpacity
+            style={styles.avatarLarge}
+            onPress={handleAvatarPress}
+            activeOpacity={0.85}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator color={Colors.primary} size="large" />
+            ) : avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarEmoji}>👤</Text>
+            )}
+            {!uploading && (
+              <View style={styles.cameraBadge}>
+                <Text style={styles.cameraBadgeIcon}>📷</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           <Text style={styles.profileName}>{displayName}</Text>
           <Text style={styles.profileEmail}>{userEmail}</Text>
-          <TouchableOpacity style={styles.editButton}>
-            <Text style={styles.editButtonText}>Edit Profile</Text>
+          <TouchableOpacity style={styles.editButton} onPress={handleAvatarPress} activeOpacity={0.8}>
+            <Text style={styles.editButtonText}>
+              {avatarUrl ? 'Change Photo' : 'Add Profile Photo'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionLabel}>Notifications</Text>
         <View style={styles.card}>
           <SettingsRow
-            emoji="🔔"
-            label="Push Notifications"
+            emoji="🔔" label="Push Notifications"
             value={<Switch value={notifications} onValueChange={handleNotificationsToggle} trackColor={{ true: Colors.primary }} thumbColor={Colors.white} />}
           />
           <View style={styles.divider} />
           <SettingsRow
-            emoji="⏰"
-            label="Expiry Alerts"
+            emoji="⏰" label="Expiry Alerts"
             value={<Switch value={expiryAlerts} onValueChange={handleExpiryAlertsToggle} trackColor={{ true: Colors.primary }} thumbColor={Colors.white} />}
           />
         </View>
 
         <Text style={styles.sectionLabel}>Health</Text>
         <View style={styles.card}>
-          <SettingsRow
-            emoji="🆘"
-            label="Medical ID"
-            onPress={() => router.push('/medical-id' as any)}
-          />
+          <SettingsRow emoji="🆘" label="Medical ID" onPress={() => router.push('/medical-id' as any)} />
           <View style={styles.divider} />
-          <SettingsRow
-            emoji="👨‍⚕️"
-            label="Doctors & Contacts"
-            onPress={() => router.push('/contacts' as any)}
-          />
+          <SettingsRow emoji="👨‍⚕️" label="Doctors & Contacts" onPress={() => router.push('/contacts' as any)} />
           <View style={styles.divider} />
-          <SettingsRow
-            emoji="📤"
-            label="Export Medicine List"
-            onPress={handleExportCSV}
-          />
+          <SettingsRow emoji="📤" label="Export Medicine List" onPress={handleExportCSV} />
         </View>
 
         <Text style={styles.sectionLabel}>Account</Text>
         <View style={styles.card}>
-          <SettingsRow emoji="👨‍👩‍👧‍👦" label="Family Members" onPress={() => Alert.alert('Coming Soon', 'Family sharing coming soon!')} />
+          <SettingsRow emoji="👨‍👩‍👧‍👦" label="Family Members" onPress={() => router.push('/family/index' as any)} />
           <View style={styles.divider} />
           <SettingsRow emoji="🔒" label="Privacy Settings" onPress={() => Alert.alert('Coming Soon')} />
         </View>
@@ -227,10 +303,20 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
   },
   avatarLarge: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: Colors.inputBg, justifyContent: 'center', alignItems: 'center', marginBottom: 12,
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: Colors.inputBg, justifyContent: 'center', alignItems: 'center',
+    marginBottom: 12, overflow: 'visible',
   },
-  avatarEmoji: { fontSize: 36 },
+  avatarImage: { width: 88, height: 88, borderRadius: 44 },
+  avatarEmoji: { fontSize: 38 },
+  cameraBadge: {
+    position: 'absolute', bottom: 0, right: -2,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: Colors.white,
+  },
+  cameraBadgeIcon: { fontSize: 13 },
   profileName: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
   profileEmail: { fontSize: 14, color: Colors.textSecondary, marginBottom: 16 },
   editButton: {
@@ -238,7 +324,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 20,
   },
   editButtonText: { color: Colors.primary, fontSize: 14, fontWeight: '600' },
-  sectionLabel: { fontSize: 12, fontWeight: '600', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4 },
+  sectionLabel: {
+    fontSize: 12, fontWeight: '600', color: Colors.textMuted,
+    textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginLeft: 4,
+  },
   card: {
     backgroundColor: Colors.white, borderRadius: 14, marginBottom: 20,
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2,

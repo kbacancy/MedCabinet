@@ -26,6 +26,9 @@ function RootLayoutNav({ session }: { session: Session | null }) {
       <Stack.Screen name="medicine/add" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="medicine/edit" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="medicine/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="family/index" options={{ headerShown: false }} />
+      <Stack.Screen name="family/add" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="family/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

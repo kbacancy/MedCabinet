@@ -18,6 +18,7 @@ export type Medicine = {
   notes?: string;
   times_per_day?: number;
   reminder_times?: string[];
+  member_id?: string;
 };
 
 export function useMedicines() {
@@ -30,6 +31,7 @@ export function useMedicines() {
     const { data, error } = await supabase
       .from('medicines')
       .select('*')
+      .is('member_id', null)
       .order('created_at', { ascending: false });
     setLoading(false);
     if (error) setError(error.message);

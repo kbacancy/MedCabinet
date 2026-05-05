@@ -26,7 +26,7 @@ const REMINDER_SLOTS = [
 
 export default function AddMedicineScreen() {
   const router = useRouter();
-  const { barcode } = useLocalSearchParams<{ barcode?: string }>();
+  const { barcode, memberId } = useLocalSearchParams<{ barcode?: string; memberId?: string }>();
 
   const [name, setName] = useState('');
   const [dosage, setDosage] = useState('');
@@ -76,12 +76,14 @@ export default function AddMedicineScreen() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
 
-    const { data: existing } = await supabase
+    const existingQuery = supabase
       .from('medicines')
       .select('id, name')
       .eq('user_id', user?.id)
-      .ilike('name', name.trim())
-      .maybeSingle();
+      .ilike('name', name.trim());
+    if (memberId) existingQuery.eq('member_id', memberId);
+    else existingQuery.is('member_id', null);
+    const { data: existing } = await existingQuery.maybeSingle();
 
     if (existing) {
       setLoading(false);
@@ -98,6 +100,7 @@ export default function AddMedicineScreen() {
 
     const { data, error } = await supabase.from('medicines').insert({
       user_id: user?.id,
+      member_id: memberId || null,
       name: name.trim(),
       dosage: dosage.trim(),
       quantity: parseInt(quantity) || 0,

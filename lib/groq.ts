@@ -98,6 +98,74 @@ export type FoodInteraction = {
   message: string;
 };
 
+export type HealthMotivation = {
+  emoji: string;
+  title: string;
+  message: string;
+};
+
+export async function getHealthMotivation(context: {
+  medicineCount: number;
+  takenCount: number;
+  adherencePercent: number;
+  activeCourses: string[];
+  allTaken: boolean;
+}): Promise<HealthMotivation | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+  if (!apiKey || apiKey === 'your_groq_api_key_here') return null;
+
+  const { medicineCount, takenCount, adherencePercent, activeCourses, allTaken } = context;
+
+  let contextStr = 'The user has no medicines added yet.';
+  if (medicineCount > 0) {
+    contextStr = `The user has ${medicineCount} medicine(s) in their cabinet. They have taken ${takenCount} of ${medicineCount} medicines today (${adherencePercent}% adherence).`;
+    if (activeCourses.length > 0) {
+      contextStr += ` Active prescription/antibiotic courses: ${activeCourses.join(', ')}.`;
+    }
+    if (allTaken) contextStr += ' All doses taken today — excellent adherence!';
+  }
+
+  const prompt = `You are a warm, encouraging health companion in a medicine tracking app. Generate a short personalized health message for today.
+
+Context: ${contextStr}
+
+Rules:
+- Active antibiotic/prescription course → gently remind the user to complete the full course as prescribed
+- All doses taken → celebrate their effort + one brief wellness tip
+- Some doses pending → encourage taking remaining medicines + a wellness tip
+- No medicines → share an uplifting wellness tip (hydration, sleep, nutrition, or movement)
+- 1–2 sentences max, warm, positive, never preachy
+- Pick a fitting single emoji
+
+Respond ONLY with valid JSON (no extra text):
+{"emoji": "🌿", "title": "Short 2-4 word title", "message": "Your message here."}`;
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 128,
+      }),
+    });
+    if (!response.ok) return null;
+    const json = await response.json();
+    const content = (json.choices?.[0]?.message?.content ?? '').trim();
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]);
+    if (typeof parsed.emoji === 'string' && typeof parsed.title === 'string' && typeof parsed.message === 'string') {
+      return parsed as HealthMotivation;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function checkFoodInteractionsAI(medicineNames: string[]): Promise<FoodInteraction[]> {
   const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
   if (!apiKey || apiKey === 'your_groq_api_key_here' || medicineNames.length === 0) return [];

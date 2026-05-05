@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, RefreshControl, ActivityIndicator, TextInput,
+  StatusBar, RefreshControl, ActivityIndicator, TextInput, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
@@ -11,6 +11,7 @@ import { useTodayDoseLogs } from '../../hooks/useDoseLogs';
 import { checkInteractions } from '../../lib/interactions';
 import MedicineCard from '../../components/MedicineCard';
 import PlusIcon from '../../components/PlusIcon';
+import MotivationCard from '../../components/MotivationCard';
 
 const ALL_CATEGORIES = ['All', 'Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
 
@@ -34,6 +35,7 @@ export default function HomeScreen() {
   const { medicines, loading, refetch } = useMedicines();
   const { isTaken, markTaken, refetch: refetchLogs } = useTodayDoseLogs();
   const [userName, setUserName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -43,8 +45,10 @@ export default function HomeScreen() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      const name = data.user?.user_metadata?.full_name ?? data.user?.email ?? 'there';
+      const meta = data.user?.user_metadata;
+      const name = meta?.full_name ?? data.user?.email ?? 'there';
       setUserName(name.split(' ')[0]);
+      if (meta?.avatar_url) setAvatarUrl(meta.avatar_url);
     });
   }, []);
 
@@ -61,6 +65,12 @@ export default function HomeScreen() {
   // Real adherence: how many medicines taken today vs. total
   const takenCount = medicines.filter(m => isTaken(m.id)).length;
   const adherencePercent = medicines.length > 0 ? Math.round((takenCount / medicines.length) * 100) : 0;
+  const allTaken = medicines.length > 0 && takenCount === medicines.length;
+
+  // Active courses: antibiotics or doctor-prescribed medicines
+  const activeCourses = medicines
+    .filter(m => m.category === 'Antibiotics' || !!m.doctor_name)
+    .map(m => m.name);
 
   // Filtered cabinet list
   const filtered = medicines.filter(m => {
@@ -76,7 +86,9 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarEmoji}>👤</Text>
+            {avatarUrl
+              ? <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              : <Text style={styles.avatarEmoji}>👤</Text>}
           </View>
           <Text style={styles.greeting}>{greeting}{userName ? `, ${userName}` : ''}</Text>
         </View>
@@ -154,6 +166,15 @@ export default function HomeScreen() {
           </View>
           <AdherenceRing percent={adherencePercent} />
         </View>
+
+        {/* Daily health motivation */}
+        <MotivationCard
+          medicineCount={medicines.length}
+          takenCount={takenCount}
+          adherencePercent={adherencePercent}
+          activeCourses={activeCourses}
+          allTaken={allTaken}
+        />
 
         {/* Today's Doses */}
         {medicines.length > 0 && (
@@ -254,7 +275,9 @@ const styles = StyleSheet.create({
   avatar: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: Colors.inputBg, justifyContent: 'center', alignItems: 'center',
+    overflow: 'hidden',
   },
+  avatarImage: { width: 36, height: 36, borderRadius: 18 },
   avatarEmoji: { fontSize: 18 },
   greeting: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
   searchRow: {
