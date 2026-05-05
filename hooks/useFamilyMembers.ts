@@ -19,12 +19,15 @@ export function useFamilyMembers() {
 
   const refetch = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('family_members')
-      .select('*')
-      .order('created_at', { ascending: true });
-    setLoading(false);
-    setMembers(data ?? []);
+    try {
+      const { data } = await supabase
+        .from('family_members')
+        .select('*')
+        .order('created_at', { ascending: true });
+      setMembers(data ?? []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(useCallback(() => { refetch(); }, [refetch]));
