@@ -26,14 +26,14 @@ function RootLayoutNav({ session }: { session: Session | null }) {
       <Stack.Screen name="medicine/add" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="medicine/edit" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="medicine/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="family/index" options={{ headerShown: false }} />
+      <Stack.Screen name="family" options={{ headerShown: false }} />
       <Stack.Screen name="family/add" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="family/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="reports/pdf" options={{ headerShown: false }} />
       <Stack.Screen name="reports/charts" options={{ headerShown: false }} />
-      <Stack.Screen name="journal/index" options={{ headerShown: false }} />
+      <Stack.Screen name="journal" options={{ headerShown: false }} />
       <Stack.Screen name="journal/add" options={{ presentation: 'modal', headerShown: false }} />
-      <Stack.Screen name="caregiver/index" options={{ headerShown: false }} />
+      <Stack.Screen name="caregiver" options={{ headerShown: false }} />
       <Stack.Screen name="caregiver/invite" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="caregiver/accept" options={{ headerShown: false }} />
       <Stack.Screen name="caregiver/dashboard" options={{ headerShown: false }} />

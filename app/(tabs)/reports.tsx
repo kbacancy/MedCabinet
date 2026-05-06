@@ -76,7 +76,7 @@ export default function ReportsScreen() {
             emoji="📓"
             title="Symptom Journal"
             description="Log how you feel and correlate with medicines"
-            onPress={() => router.push('/journal/index' as any)}
+            onPress={() => router.push('/journal' as any)}
           />
         </View>
 
