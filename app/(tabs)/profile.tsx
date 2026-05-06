@@ -258,7 +258,7 @@ export default function ProfileScreen() {
         <View style={styles.card}>
           <SettingsRow emoji="👨‍👩‍👧‍👦" label="Family Members" onPress={() => router.push('/family' as any)} />
           <View style={styles.divider} />
-          <SettingsRow emoji="👥" label="Caregiver Mode" onPress={() => router.push('/caregiver/index' as any)} />
+          <SettingsRow emoji="👥" label="Caregiver Mode" onPress={() => router.push('/caregiver' as any)} />
           <View style={styles.divider} />
           <SettingsRow emoji="🔒" label="Privacy Settings" onPress={() => Alert.alert('Coming Soon')} />
         </View>
