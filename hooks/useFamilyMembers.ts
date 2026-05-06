@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
@@ -15,7 +15,7 @@ export type FamilyMember = {
 
 export function useFamilyMembers() {
   const [members, setMembers] = useState<FamilyMember[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -25,11 +25,16 @@ export function useFamilyMembers() {
         .select('*')
         .order('created_at', { ascending: true });
       setMembers(data ?? []);
+    } catch {
+      setMembers([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // useEffect ensures the initial fetch always fires on mount (useFocusEffect alone
+  // can miss the first focus event when pushing from a tab into the root Stack).
+  useEffect(() => { refetch(); }, [refetch]);
   useFocusEffect(useCallback(() => { refetch(); }, [refetch]));
 
   const addMember = async (member: Pick<FamilyMember, 'name' | 'relationship' | 'color' | 'date_of_birth' | 'notes'>) => {

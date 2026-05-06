@@ -256,7 +256,7 @@ export default function ProfileScreen() {
 
         <Text style={styles.sectionLabel}>Account</Text>
         <View style={styles.card}>
-          <SettingsRow emoji="👨‍👩‍👧‍👦" label="Family Members" onPress={() => router.push('/family/index' as any)} />
+          <SettingsRow emoji="👨‍👩‍👧‍👦" label="Family Members" onPress={() => router.push('/family' as any)} />
           <View style={styles.divider} />
           <SettingsRow emoji="🔒" label="Privacy Settings" onPress={() => Alert.alert('Coming Soon')} />
         </View>
