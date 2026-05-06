@@ -201,6 +201,14 @@ export default function MedicineDetailScreen() {
           </Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.logSymptomBtn}
+          onPress={() => router.push(`/journal/add?medicineId=${id}` as any)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.logSymptomText}>📓 Log how this medicine makes you feel</Text>
+        </TouchableOpacity>
+
         <View style={styles.infoCard}>
           <View style={styles.infoCol}>
             <View style={styles.infoHeader}>
@@ -346,6 +354,12 @@ const styles = StyleSheet.create({
   takeTodaySubtitle: { fontSize: 12, color: Colors.textSecondary },
   takeAction: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   takeActionTaken: { color: Colors.textMuted },
+  logSymptomBtn: {
+    backgroundColor: Colors.white, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14,
+    marginBottom: 16, borderWidth: 1, borderColor: Colors.borderLight,
+    alignItems: 'center',
+  },
+  logSymptomText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
   infoCard: {
     backgroundColor: Colors.white, borderRadius: 14, padding: 16,
     flexDirection: 'row', marginBottom: 16,

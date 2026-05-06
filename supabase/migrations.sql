@@ -98,3 +98,20 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- NULL member_id = primary user's record; non-null = family member's record
 ALTER TABLE medicines  ADD COLUMN IF NOT EXISTS member_id uuid REFERENCES family_members(id) ON DELETE CASCADE;
 ALTER TABLE dose_logs  ADD COLUMN IF NOT EXISTS member_id uuid REFERENCES family_members(id) ON DELETE CASCADE;
+
+-- 8. Symptom journal — log daily wellbeing, optionally linked to a medicine
+CREATE TABLE IF NOT EXISTS symptom_logs (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  medicine_id uuid REFERENCES medicines(id) ON DELETE SET NULL,
+  rating      integer NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  note        text,
+  date        date NOT NULL DEFAULT current_date,
+  logged_at   timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE symptom_logs ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  CREATE POLICY "Users manage own symptom logs" ON symptom_logs FOR ALL USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+CREATE INDEX IF NOT EXISTS symptom_logs_user_date ON symptom_logs (user_id, date DESC);
