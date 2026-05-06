@@ -32,7 +32,15 @@
         "CAMERA",
         "RECORD_AUDIO"
       ],
-      "edgeToEdgeEnabled": false
+      "edgeToEdgeEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [{ "scheme": "medcabinet" }],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

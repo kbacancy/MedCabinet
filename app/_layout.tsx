@@ -33,6 +33,10 @@ function RootLayoutNav({ session }: { session: Session | null }) {
       <Stack.Screen name="reports/charts" options={{ headerShown: false }} />
       <Stack.Screen name="journal/index" options={{ headerShown: false }} />
       <Stack.Screen name="journal/add" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="caregiver/index" options={{ headerShown: false }} />
+      <Stack.Screen name="caregiver/invite" options={{ presentation: 'modal', headerShown: false }} />
+      <Stack.Screen name="caregiver/accept" options={{ headerShown: false }} />
+      <Stack.Screen name="caregiver/dashboard" options={{ headerShown: false }} />
     </Stack>
   );
 }
