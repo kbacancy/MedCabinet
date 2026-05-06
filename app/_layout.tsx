@@ -29,6 +29,8 @@ function RootLayoutNav({ session }: { session: Session | null }) {
       <Stack.Screen name="family/index" options={{ headerShown: false }} />
       <Stack.Screen name="family/add" options={{ presentation: 'modal', headerShown: false }} />
       <Stack.Screen name="family/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="reports/pdf" options={{ headerShown: false }} />
+      <Stack.Screen name="reports/charts" options={{ headerShown: false }} />
     </Stack>
   );
 }

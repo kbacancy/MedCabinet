@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
@@ -53,4 +53,30 @@ export function useTodayDoseLogs() {
   };
 
   return { logs, loading, isTaken, markTaken, unmarkTaken, refetch };
+}
+
+export function useDoseLogRange(startDate: string, endDate: string) {
+  const [logs, setLogs] = useState<DoseLog[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await supabase
+        .from('dose_logs')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true });
+      setLogs(data ?? []);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [startDate, endDate]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { logs, loading, refetch: fetch };
 }

@@ -77,6 +77,10 @@ export default function TabsLayout() {
         options={{ title: 'Alerts', tabBarIcon: () => <AlertsTabIcon /> }}
       />
       <Tabs.Screen
+        name="reports"
+        options={{ title: 'Reports', tabBarIcon: () => <TabIcon emoji="📊" /> }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{ title: 'Profile', tabBarIcon: () => <TabIcon emoji="👤" /> }}
       />
