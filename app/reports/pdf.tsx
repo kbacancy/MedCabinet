@@ -12,6 +12,7 @@ import { useMedicines } from '../../hooks/useMedicines';
 import { useDoseLogRange } from '../../hooks/useDoseLogs';
 import { generateHealthReportHTML } from '../../lib/pdfReport';
 import { logAuditEvent } from '../../lib/audit';
+import { recordConsent, CONSENT_TEXT } from '../../lib/consent';
 import type { MedicalId, Contact } from '../../lib/supabase';
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -58,6 +59,21 @@ export default function PdfReportScreen() {
     setShowConsent(false);
     setGenerating(true);
     try {
+      // Persist consent record to DB before any PHI is exported — abort if this fails
+      const phiScope = {
+        medicines_count: medicines.length,
+        includes_medical_id: medicalId !== null,
+        includes_contacts: contacts.length > 0,
+        includes_dose_logs: logs.length > 0,
+        report_period_days: 30,
+      };
+      const { success, error: consentError } = await recordConsent('PDF_REPORT_GENERATION', phiScope);
+      if (!success) {
+        Alert.alert('Unable to proceed', `Could not record your consent: ${consentError}. Please try again.`);
+        setGenerating(false);
+        return;
+      }
+
       await logAuditEvent('READ', 'medicines', undefined, {
         action_detail: 'pdf_report_generated',
         medicines_count: medicines.length,
@@ -186,7 +202,7 @@ export default function PdfReportScreen() {
                 {consentChecked && <Text style={styles.checkmark}>✓</Text>}
               </View>
               <Text style={styles.checkLabel}>
-                I understand this PDF contains my personal health data and I consent to generating and sharing it.
+                {CONSENT_TEXT.PDF_REPORT_GENERATION}
               </Text>
             </TouchableOpacity>
 
