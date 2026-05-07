@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
+  View, Text, StyleSheet, TouchableOpacity, TextInput, Modal,
   StatusBar, ScrollView, Alert, Share, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { recordConsent, CONSENT_TEXT } from '../../lib/consent';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
@@ -19,16 +20,32 @@ export default function InviteCaregiverScreen() {
   const [creating, setCreating] = useState(false);
   const [createdLink, setCreatedLink] = useState<CaregiverLink | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   const deepLink = createdLink
     ? `medcabinet://caregiver/accept?token=${createdLink.invite_token}`
     : '';
 
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!selectedMember) { Alert.alert('Select a family member first'); return; }
     if (!email.trim()) { Alert.alert('Enter the caregiver\'s email'); return; }
+    setConsentChecked(false);
+    setShowConsent(true);
+  };
+
+  const handleConsentAccept = async () => {
+    setShowConsent(false);
+    const { success, error: consentError } = await recordConsent('CAREGIVER_INVITE_OWNER', {
+      member_name: selectedMember?.name ?? '',
+      caregiver_email: email.trim(),
+    });
+    if (!success) {
+      Alert.alert('Unable to proceed', `Could not record your consent: ${consentError}. Please try again.`);
+      return;
+    }
     setCreating(true);
-    const result = await createInvite(selectedMember.id, email.trim());
+    const result = await createInvite(selectedMember!.id, email.trim());
     setCreating(false);
     if (result) setCreatedLink(result);
     else Alert.alert('Error', 'Could not create invite. Please try again.');
@@ -102,6 +119,38 @@ export default function InviteCaregiverScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <Modal visible={showConsent} transparent animationType="slide" onRequestClose={() => setShowConsent(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Share Health Data</Text>
+            <Text style={styles.sheetSubtitle}>
+              You are about to invite <Text style={{ fontWeight: '700' }}>{email}</Text> to monitor{' '}
+              <Text style={{ fontWeight: '700' }}>{selectedMember?.name}</Text>'s medicines and dose history.
+            </Text>
+            <View style={styles.sheetConsentBox}>
+              <Text style={styles.sheetConsentText}>{CONSENT_TEXT.CAREGIVER_INVITE_OWNER}</Text>
+            </View>
+            <TouchableOpacity style={styles.sheetCheckRow} onPress={() => setConsentChecked(v => !v)} activeOpacity={0.7}>
+              <View style={[styles.sheetCheckbox, consentChecked && styles.sheetCheckboxOn]}>
+                {consentChecked && <Text style={styles.sheetCheckmark}>✓</Text>}
+              </View>
+              <Text style={styles.sheetCheckLabel}>I consent to sharing this health data with the caregiver</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sheetAcceptBtn, !consentChecked && styles.sheetAcceptBtnOff]}
+              onPress={handleConsentAccept}
+              disabled={!consentChecked}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sheetAcceptBtnText}>Create Invite</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetCancelBtn} onPress={() => setShowConsent(false)}>
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.cancelBtn}>
@@ -255,4 +304,31 @@ const styles = StyleSheet.create({
   emptyDesc: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   emptyBtn: { marginTop: 10, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 28 },
   emptyBtnText: { fontSize: 15, fontWeight: '600', color: Colors.white },
+  // Consent sheet
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: Colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingBottom: 36, paddingTop: 14,
+  },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginBottom: 18 },
+  sheetTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
+  sheetSubtitle: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20, marginBottom: 14 },
+  sheetConsentBox: {
+    backgroundColor: Colors.inputBg, borderRadius: 10, padding: 12, marginBottom: 14,
+    borderWidth: 1, borderColor: Colors.borderLight,
+  },
+  sheetConsentText: { fontSize: 12, color: Colors.textSecondary, lineHeight: 18 },
+  sheetCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 18 },
+  sheetCheckbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border,
+    justifyContent: 'center', alignItems: 'center', marginTop: 1,
+  },
+  sheetCheckboxOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  sheetCheckmark: { fontSize: 13, color: Colors.white, fontWeight: '700' },
+  sheetCheckLabel: { flex: 1, fontSize: 13, color: Colors.textPrimary, lineHeight: 19 },
+  sheetAcceptBtn: { backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  sheetAcceptBtnOff: { opacity: 0.45 },
+  sheetAcceptBtnText: { fontSize: 15, fontWeight: '700', color: Colors.white },
+  sheetCancelBtn: { alignItems: 'center', paddingVertical: 10 },
+  sheetCancelText: { fontSize: 15, color: Colors.textSecondary },
 });

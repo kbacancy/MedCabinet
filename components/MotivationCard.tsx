@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getHealthMotivation, type HealthMotivation } from '../lib/groq';
 import { Colors } from '../constants/colors';
+import { useAIConsent } from '../hooks/useAIConsent';
 
 type Props = {
   medicineCount: number;
@@ -31,6 +32,7 @@ export default function MotivationCard({ medicineCount, takenCount, adherencePer
   const [loading, setLoading] = useState(true);
   const pulseAnim = useRef(new Animated.Value(0.35)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { aiConsentGranted, aiConsentChecking, AIConsentModal } = useAIConsent();
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -63,6 +65,13 @@ export default function MotivationCard({ medicineCount, takenCount, adherencePer
       } catch {}
     }
 
+    if (!aiConsentGranted) {
+      const fallback = FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+      setData(fallback);
+      setLoading(false);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+      return;
+    }
     const result = await getHealthMotivation({ medicineCount, takenCount, adherencePercent, activeCourses, allTaken });
     const final = result ?? FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
 
@@ -73,7 +82,7 @@ export default function MotivationCard({ medicineCount, takenCount, adherencePer
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   };
 
-  useEffect(() => { fetchMotivation(); }, []);
+  useEffect(() => { if (!aiConsentChecking) fetchMotivation(); }, [aiConsentChecking, aiConsentGranted]);
 
   if (loading) {
     return (
@@ -95,6 +104,7 @@ export default function MotivationCard({ medicineCount, takenCount, adherencePer
 
   return (
     <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
+      {AIConsentModal}
       <View style={styles.accentBar} />
       <View style={styles.content}>
         <View style={styles.iconBox}>

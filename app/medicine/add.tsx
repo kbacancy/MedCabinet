@@ -12,6 +12,7 @@ import { scheduleMedicineNotifications } from '../../lib/notifications';
 import { SmartKeyboardBar } from '../../components/SmartKeyboardBar';
 import type { FocusedField } from '../../components/SmartKeyboardBar';
 import { suggestCategory } from '../../lib/groq';
+import { useAIConsent } from '../../hooks/useAIConsent';
 
 const CATEGORIES = ['Pain Relief', 'Antibiotics', 'Supplements', 'Vitamins', 'Blood Pressure', 'Diabetes', 'Cholesterol', 'Other'];
 const BAR_ID = 'add-smart-bar';
@@ -42,6 +43,7 @@ export default function AddMedicineScreen() {
   const [notes, setNotes] = useState('');
   const [showPrescription, setShowPrescription] = useState(false);
 
+  const { aiConsentGranted, AIConsentModal } = useAIConsent();
   const [loading, setLoading] = useState(false);
   const [aiSuggesting, setAiSuggesting] = useState(false);
   const [aiSuggestedCategory, setAiSuggestedCategory] = useState<string | null>(null);
@@ -54,10 +56,9 @@ export default function AddMedicineScreen() {
     if (name.trim().length < 3) { setAiSuggestedCategory(null); return; }
     setAiSuggesting(true);
     debounceRef.current = setTimeout(async () => {
-      const suggestion = await suggestCategory(name);
-      if (suggestion) {
-        setCategory(suggestion);
-        setAiSuggestedCategory(suggestion);
+      if (aiConsentGranted) {
+        const suggestion = await suggestCategory(name);
+        if (suggestion) { setCategory(suggestion); setAiSuggestedCategory(suggestion); }
       }
       setAiSuggesting(false);
     }, 700);
@@ -148,6 +149,7 @@ export default function AddMedicineScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
+      {AIConsentModal}
 
       <View style={styles.navbar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>

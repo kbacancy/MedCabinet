@@ -7,6 +7,7 @@ import { Session } from '@supabase/supabase-js';
 import { AnimatedSplash } from '../components/AnimatedSplash';
 import { setupNotificationChannels, requestNotificationPermissions } from '../lib/notifications';
 import { logAuditEvent } from '../lib/audit';
+import { clearConsentCache } from '../lib/consent';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -93,7 +94,10 @@ export default function RootLayout() {
         if (event === 'SIGNED_IN') logAuditEvent('LOGIN', 'auth');
       } else {
         if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-        if (event === 'SIGNED_OUT') logAuditEvent('LOGOUT', 'auth');
+        if (event === 'SIGNED_OUT') {
+          logAuditEvent('LOGOUT', 'auth');
+          clearConsentCache();
+        }
       }
     });
 

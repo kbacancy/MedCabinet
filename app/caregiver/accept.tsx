@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
-  StatusBar, ActivityIndicator, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, TouchableOpacity, TextInput, Modal,
+  StatusBar, ActivityIndicator, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { useCaregiverLinks } from '../../hooks/useCaregiverLinks';
+import { recordConsent, CONSENT_TEXT } from '../../lib/consent';
 
 export default function AcceptInviteScreen() {
   const router = useRouter();
@@ -18,6 +19,8 @@ export default function AcceptInviteScreen() {
   const [accepting, setAccepting] = useState(false);
   const [result, setResult] = useState<{ memberId: string; memberName: string } | null>(null);
   const [error, setError] = useState('');
+  const [showConsent, setShowConsent] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
 
   // Auto-preview when a token arrives from deep link
   useEffect(() => {
@@ -42,7 +45,20 @@ export default function AcceptInviteScreen() {
     }
   };
 
-  const handleAccept = async () => {
+  const handleAcceptPress = () => {
+    setConsentChecked(false);
+    setShowConsent(true);
+  };
+
+  const handleConsentAccept = async () => {
+    setShowConsent(false);
+    const { success, error: consentError } = await recordConsent('CAREGIVER_ACCESS_ACCEPTANCE', {
+      member_name: preview?.memberName ?? '',
+    });
+    if (!success) {
+      Alert.alert('Unable to proceed', `Could not record your consent: ${consentError}. Please try again.`);
+      return;
+    }
     setAccepting(true);
     setError('');
     const res = await acceptInvite(token);
@@ -90,6 +106,38 @@ export default function AcceptInviteScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <Modal visible={showConsent} transparent animationType="slide" onRequestClose={() => setShowConsent(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Access Health Data</Text>
+            <Text style={styles.sheetSubtitle}>
+              You are about to gain caregiver access to{' '}
+              <Text style={{ fontWeight: '700' }}>{preview?.memberName}</Text>'s medicines and dose history.
+            </Text>
+            <View style={styles.sheetConsentBox}>
+              <Text style={styles.sheetConsentText}>{CONSENT_TEXT.CAREGIVER_ACCESS_ACCEPTANCE}</Text>
+            </View>
+            <TouchableOpacity style={styles.sheetCheckRow} onPress={() => setConsentChecked(v => !v)} activeOpacity={0.7}>
+              <View style={[styles.sheetCheckbox, consentChecked && styles.sheetCheckboxOn]}>
+                {consentChecked && <Text style={styles.sheetCheckmark}>✓</Text>}
+              </View>
+              <Text style={styles.sheetCheckLabel}>I understand and agree to access this health data responsibly</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sheetAcceptBtn, !consentChecked && styles.sheetAcceptBtnOff]}
+              onPress={handleConsentAccept}
+              disabled={!consentChecked}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sheetAcceptBtnText}>Accept Access</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetCancelBtn} onPress={() => setShowConsent(false)}>
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
       <View style={styles.navbar}>
@@ -139,7 +187,7 @@ export default function AcceptInviteScreen() {
         ) : (
           <TouchableOpacity
             style={[styles.primaryBtn, accepting && styles.btnDisabled]}
-            onPress={handleAccept}
+            onPress={handleAcceptPress}
             disabled={accepting}
             activeOpacity={0.85}
           >
@@ -204,4 +252,31 @@ const styles = StyleSheet.create({
   },
   dashboardBtnText: { fontSize: 15, fontWeight: '700', color: Colors.white },
   backLink: { fontSize: 14, color: Colors.textMuted, textDecorationLine: 'underline' },
+  // Consent sheet
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: Colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingBottom: 36, paddingTop: 14,
+  },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginBottom: 18 },
+  sheetTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
+  sheetSubtitle: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20, marginBottom: 14 },
+  sheetConsentBox: {
+    backgroundColor: Colors.inputBg, borderRadius: 10, padding: 12, marginBottom: 14,
+    borderWidth: 1, borderColor: Colors.borderLight,
+  },
+  sheetConsentText: { fontSize: 12, color: Colors.textSecondary, lineHeight: 18 },
+  sheetCheckRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 18 },
+  sheetCheckbox: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border,
+    justifyContent: 'center', alignItems: 'center', marginTop: 1,
+  },
+  sheetCheckboxOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  sheetCheckmark: { fontSize: 13, color: Colors.white, fontWeight: '700' },
+  sheetCheckLabel: { flex: 1, fontSize: 13, color: Colors.textPrimary, lineHeight: 19 },
+  sheetAcceptBtn: { backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  sheetAcceptBtnOff: { opacity: 0.45 },
+  sheetAcceptBtnText: { fontSize: 15, fontWeight: '700', color: Colors.white },
+  sheetCancelBtn: { alignItems: 'center', paddingVertical: 10 },
+  sheetCancelText: { fontSize: 15, color: Colors.textSecondary },
 });

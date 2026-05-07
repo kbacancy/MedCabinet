@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal,
   StatusBar, Alert, Switch, Share, Image, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -13,6 +13,8 @@ import {
   cancelAllNotifications, rescheduleAllNotifications,
 } from '../../lib/notifications';
 import type { Medicine } from '../../hooks/useMedicines';
+import { recordConsent, CONSENT_TEXT } from '../../lib/consent';
+import { logAuditEvent } from '../../lib/audit';
 
 type RowProps = { emoji: string; label: string; onPress?: () => void; value?: React.ReactNode };
 
@@ -36,6 +38,9 @@ export default function ProfileScreen() {
   const [uploading, setUploading] = useState(false);
   const [notifications, setNotificationsState] = useState(true);
   const [expiryAlerts, setExpiryAlertsState] = useState(true);
+  const [showCsvConsent, setShowCsvConsent] = useState(false);
+  const [csvConsentChecked, setCsvConsentChecked] = useState(false);
+  const [pendingMeds, setPendingMeds] = useState<Medicine[]>([]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -174,13 +179,31 @@ export default function ProfileScreen() {
     const { data: meds, error } = await supabase
       .from('medicines').select('*').eq('user_id', authData.user.id).order('name');
     if (error || !meds?.length) { Alert.alert('Export', 'No medicines to export.'); return; }
+    setPendingMeds(meds as Medicine[]);
+    setCsvConsentChecked(false);
+    setShowCsvConsent(true);
+  };
+
+  const handleCsvConsentAccept = async () => {
+    setShowCsvConsent(false);
+    const { success, error: consentError } = await recordConsent('CSV_EXPORT', {
+      medicines_count: pendingMeds.length,
+    });
+    if (!success) {
+      Alert.alert('Unable to proceed', `Could not record your consent: ${consentError}. Please try again.`);
+      return;
+    }
+    await logAuditEvent('READ', 'medicines', undefined, {
+      action_detail: 'csv_export', medicines_count: pendingMeds.length,
+    });
     const header = 'Name,Dosage,Quantity,Expiry Date,Category,Doctor,Pharmacy,Rx Number,Notes';
-    const rows = (meds as Medicine[]).map(m =>
+    const rows = pendingMeds.map(m =>
       [`"${m.name}"`, `"${m.dosage ?? ''}"`, m.quantity, `"${m.expiry_date ?? ''}"`,
         `"${m.category ?? ''}"`, `"${m.doctor_name ?? ''}"`, `"${m.pharmacy ?? ''}"`,
         `"${m.rx_number ?? ''}"`, `"${(m.notes ?? '').replace(/"/g, "'")}"`].join(',')
     );
     await Share.share({ message: [header, ...rows].join('\n'), title: 'MedCabinet Export' });
+    setPendingMeds([]);
   };
 
   const handleSignOut = () => {
@@ -195,6 +218,45 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
+
+      {/* CSV Export Consent Modal */}
+      <Modal visible={showCsvConsent} transparent animationType="slide" onRequestClose={() => setShowCsvConsent(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Before You Export</Text>
+            <Text style={styles.modalSubtitle}>
+              This CSV includes your full medicine list with dosages, doctor names, pharmacy, and prescription numbers.
+            </Text>
+            <View style={styles.modalWarning}>
+              <Text style={styles.modalWarningIcon}>⚠️</Text>
+              <Text style={styles.modalWarningText}>
+                Once shared, MedCabinet cannot control how this file is stored or accessed by third parties.
+              </Text>
+            </View>
+            <View style={styles.modalConsentBox}>
+              <Text style={styles.modalConsentText}>{CONSENT_TEXT.CSV_EXPORT}</Text>
+            </View>
+            <TouchableOpacity style={styles.modalCheckRow} onPress={() => setCsvConsentChecked(v => !v)} activeOpacity={0.7}>
+              <View style={[styles.modalCheckbox, csvConsentChecked && styles.modalCheckboxOn]}>
+                {csvConsentChecked && <Text style={styles.modalCheckmark}>✓</Text>}
+              </View>
+              <Text style={styles.modalCheckLabel}>I understand and consent to exporting this data</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalAcceptBtn, !csvConsentChecked && styles.modalAcceptBtnOff]}
+              onPress={handleCsvConsentAccept}
+              disabled={!csvConsentChecked}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalAcceptBtnText}>Export CSV</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowCsvConsent(false)}>
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Profile</Text>
@@ -359,4 +421,45 @@ const styles = StyleSheet.create({
   },
   signOutText: { color: Colors.danger, fontSize: 15, fontWeight: '600' },
   versionText: { textAlign: 'center', fontSize: 12, color: Colors.textMuted },
+
+  // CSV consent modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, paddingBottom: 40,
+  },
+  modalHandle: {
+    width: 40, height: 4, backgroundColor: Colors.borderLight,
+    borderRadius: 2, alignSelf: 'center', marginBottom: 20,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, marginBottom: 6 },
+  modalSubtitle: { fontSize: 13, color: Colors.textSecondary, lineHeight: 19, marginBottom: 14 },
+  modalWarning: {
+    flexDirection: 'row', gap: 8, backgroundColor: '#FFF8EC',
+    borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#F5DFA0', marginBottom: 12,
+  },
+  modalWarningIcon: { fontSize: 15 },
+  modalWarningText: { flex: 1, fontSize: 12, color: '#8a6000', lineHeight: 17 },
+  modalConsentBox: {
+    backgroundColor: Colors.surface, borderRadius: 10,
+    borderWidth: 1, borderColor: Colors.borderLight, padding: 12, marginBottom: 16,
+  },
+  modalConsentText: { fontSize: 11.5, color: Colors.textSecondary, lineHeight: 17 },
+  modalCheckRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  modalCheckbox: {
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 2, borderColor: Colors.borderLight,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  modalCheckboxOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  modalCheckmark: { fontSize: 13, color: Colors.white, fontWeight: '700' },
+  modalCheckLabel: { flex: 1, fontSize: 13, color: Colors.textPrimary, lineHeight: 18 },
+  modalAcceptBtn: {
+    backgroundColor: Colors.primary, borderRadius: 14,
+    paddingVertical: 15, alignItems: 'center', marginBottom: 10,
+  },
+  modalAcceptBtnOff: { opacity: 0.4 },
+  modalAcceptBtnText: { fontSize: 15, fontWeight: '700', color: Colors.white },
+  modalCancelBtn: { alignItems: 'center', paddingVertical: 10 },
+  modalCancelText: { fontSize: 14, color: Colors.textMuted },
 });

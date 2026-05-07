@@ -8,6 +8,7 @@ import { Colors } from '../../constants/colors';
 import { useMedicines, daysUntilExpiry } from '../../hooks/useMedicines';
 import { checkInteractions, type Interaction } from '../../lib/interactions';
 import { checkInteractionsAI } from '../../lib/groq';
+import { useAIConsent } from '../../hooks/useAIConsent';
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   'Antibiotic': '🏥', 'Blood Pressure': '💊', 'Cholesterol': '💉',
@@ -18,6 +19,7 @@ const CATEGORY_EMOJIS: Record<string, string> = {
 export default function AlertsScreen() {
   const router = useRouter();
   const { medicines, loading } = useMedicines();
+  const { aiConsentGranted, aiConsentChecking, requestConsent, AIConsentModal } = useAIConsent();
   const [tipDismissed, setTipDismissed] = useState(false);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
@@ -29,8 +31,9 @@ export default function AlertsScreen() {
     .sort((a, b) => a.daysLeft - b.daysLeft);
 
   useEffect(() => {
-    if (loading || medicines.length < 2) {
-      setInteractions(medicines.length < 2 ? [] : checkInteractions(medicines.map(m => m.name)));
+    if (loading || aiConsentChecking) return;
+    if (medicines.length < 2) {
+      setInteractions(checkInteractions(medicines.map(m => m.name)));
       return;
     }
     const names = medicines.map(m => m.name).sort().join(',');
@@ -40,7 +43,7 @@ export default function AlertsScreen() {
     const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
     const hasValidKey = apiKey && apiKey !== 'your_groq_api_key_here';
 
-    if (hasValidKey) {
+    if (hasValidKey && aiConsentGranted) {
       setAiLoading(true);
       checkInteractionsAI(medicines.map(m => m.name))
         .then(results => {
@@ -48,14 +51,19 @@ export default function AlertsScreen() {
         })
         .catch(() => setInteractions(checkInteractions(medicines.map(m => m.name))))
         .finally(() => setAiLoading(false));
+    } else if (hasValidKey && !aiConsentGranted) {
+      // Prompt consent then re-check on next render when aiConsentGranted flips
+      requestConsent();
+      setInteractions(checkInteractions(medicines.map(m => m.name)));
     } else {
       setInteractions(checkInteractions(medicines.map(m => m.name)));
     }
-  }, [medicines, loading]);
+  }, [medicines, loading, aiConsentGranted, aiConsentChecking]);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
+      {AIConsentModal}
 
       <View style={styles.header}>
         <View style={styles.headerLeft}>
