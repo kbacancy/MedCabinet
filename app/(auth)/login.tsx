@@ -125,7 +125,7 @@ export default function LoginScreen() {
 
         <View style={styles.hipaaRow}>
           <Text style={styles.hipaaIcon}>🛡</Text>
-          <Text style={styles.hipaaText}>HIPAA Compliant & Secure</Text>
+          <Text style={styles.hipaaText}>Your data is private & secure</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

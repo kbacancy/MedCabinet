@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus, PanResponder, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useRouter, useSegments } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { AnimatedSplash } from '../components/AnimatedSplash';
 import { setupNotificationChannels, requestNotificationPermissions } from '../lib/notifications';
+import { logAuditEvent } from '../lib/audit';
+
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 function RootLayoutNav({ session }: { session: Session | null }) {
   const segments = useSegments();
@@ -46,8 +50,29 @@ export default function RootLayout() {
   const [authLoaded, setAuthLoaded] = useState(false);
   const [minTimePassed, setMinTimePassed] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionRef = useRef<Session | null>(null);
 
   const splashReady = authLoaded && minTimePassed;
+
+  const resetInactivityTimer = () => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    if (!sessionRef.current) return;
+    inactivityTimer.current = setTimeout(async () => {
+      await logAuditEvent('SESSION_TIMEOUT', 'auth');
+      await supabase.auth.signOut();
+    }, INACTIVITY_TIMEOUT_MS);
+  };
+
+  // PanResponder captures any touch to reset the inactivity clock
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => {
+        resetInactivityTimer();
+        return false;
+      },
+    })
+  ).current;
 
   useEffect(() => {
     setupNotificationChannels();
@@ -55,19 +80,41 @@ export default function RootLayout() {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      sessionRef.current = session;
       setAuthLoaded(true);
+      if (session) resetInactivityTimer();
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      sessionRef.current = session;
+      if (session) {
+        resetInactivityTimer();
+        if (event === 'SIGNED_IN') logAuditEvent('LOGIN', 'auth');
+      } else {
+        if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+        if (event === 'SIGNED_OUT') logAuditEvent('LOGOUT', 'auth');
+      }
     });
+
+    // Auto-logout when app is backgrounded for more than 15 minutes
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        resetInactivityTimer();
+      } else {
+        if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      }
+    };
+    const appStateSub = AppState.addEventListener('change', handleAppStateChange);
 
     // Minimum display time so animations fully play
     const timer = setTimeout(() => setMinTimePassed(true), 2200);
 
     return () => {
       subscription.unsubscribe();
+      appStateSub.remove();
       clearTimeout(timer);
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     };
   }, []);
 
@@ -80,5 +127,9 @@ export default function RootLayout() {
     );
   }
 
-  return <RootLayoutNav session={session} />;
+  return (
+    <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+      <RootLayoutNav session={session} />
+    </View>
+  );
 }

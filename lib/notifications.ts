@@ -84,10 +84,8 @@ export async function scheduleMedicineNotifications(medicine: Medicine): Promise
     await Notifications.scheduleNotificationAsync({
       identifier: `reminder-${medicine.id}-${i}`,
       content: {
-        title: `Time to take ${medicine.name}`,
-        body: medicine.dosage
-          ? `${medicine.dosage} at ${timeLabel}`
-          : `Scheduled for ${timeLabel}`,
+        title: 'Medication Reminder',
+        body: `You have a scheduled dose at ${timeLabel}. Open MedCabinet to view details.`,
         sound: 'default',
         data: { medicineId: medicine.id, type: 'reminder' },
       },
@@ -105,8 +103,8 @@ export async function scheduleMedicineNotifications(medicine: Medicine): Promise
     await Notifications.scheduleNotificationAsync({
       identifier: `refill-${medicine.id}`,
       content: {
-        title: `Refill needed: ${medicine.name}`,
-        body: `Only ${medicine.quantity} tablets remaining. Time to refill!`,
+        title: 'Refill Reminder',
+        body: 'One of your medications is running low. Open MedCabinet to refill.',
         sound: 'default',
         data: { medicineId: medicine.id, type: 'refill' },
       },
@@ -130,8 +128,8 @@ export async function scheduleMedicineNotifications(medicine: Medicine): Promise
         await Notifications.scheduleNotificationAsync({
           identifier: `expiry-${medicine.id}`,
           content: {
-            title: `${medicine.name} expiring soon`,
-            body: `Expires on ${medicine.expiry_date}. Check your cabinet.`,
+            title: 'Medication Expiry Alert',
+            body: 'A medication in your cabinet is expiring soon. Open MedCabinet to review.',
             sound: 'default',
             data: { medicineId: medicine.id, type: 'expiry' },
           },

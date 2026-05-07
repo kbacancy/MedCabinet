@@ -275,8 +275,8 @@ export default function ProfileScreen() {
         <View style={styles.hipaaCard}>
           <Text style={styles.hipaaIcon}>🛡</Text>
           <View>
-            <Text style={styles.hipaaTitle}>HIPAA Compliant & Secure</Text>
-            <Text style={styles.hipaaDesc}>Your health data is encrypted and protected.</Text>
+            <Text style={styles.hipaaTitle}>Privacy Protected</Text>
+            <Text style={styles.hipaaDesc}>Your data is secured with row-level access controls and session protection.</Text>
           </View>
         </View>
 
