@@ -73,3 +73,20 @@ export type Contact = {
   notes?: string;
   created_at: string;
 };
+
+export type MoodLog = {
+  id: string;
+  user_id: string;
+  primary_mood: string;
+  severity: 'mild' | 'moderate' | 'high';
+  insight: string | null;
+  wellness_message: string | null;
+  suggested_action: string | null;
+  emoji: string | null;
+  energy_level: number | null;
+  emotional_state: string | null;
+  physical_symptoms: string[] | null;
+  trigger_category: string | null;
+  sleep_rating: number | null;
+  recorded_at: string;
+};

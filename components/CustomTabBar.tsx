@@ -20,6 +20,7 @@ const TAB_CONFIGS: Record<string, TabConfig> = {
   alerts:  { active: 'notifications', inactive: 'notifications-outline', label: 'Alerts'  },
   scan:    { active: 'scan',          inactive: 'scan-outline',          label: 'Scan'    },
   reports: { active: 'bar-chart',     inactive: 'bar-chart-outline',     label: 'Reports' },
+  mood:    { active: 'happy',         inactive: 'happy-outline',         label: 'Mood'    },
   profile: { active: 'person',        inactive: 'person-outline',        label: 'Profile' },
 };
 

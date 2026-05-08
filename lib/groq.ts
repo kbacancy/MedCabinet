@@ -166,6 +166,77 @@ Respond ONLY with valid JSON (no extra text):
   }
 }
 
+export type MoodAnswers = {
+  energy: number;
+  emotionalState: string;
+  physical: string[];
+  trigger: string | null;
+  sleep: number;
+};
+
+export type MoodAnalysis = {
+  primaryMood: string;
+  severity: 'mild' | 'moderate' | 'high';
+  insight: string;
+  wellnessMessage: string;
+  suggestedAction: 'breathing' | 'journal' | 'walk' | 'music' | 'rest';
+  emoji: string;
+};
+
+export async function analyzeMoodAssessment(answers: MoodAnswers): Promise<MoodAnalysis | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+  if (!apiKey || apiKey === 'your_groq_api_key_here') return null;
+
+  const prompt = `You are a compassionate mental wellness AI. Analyze this mood check-in and provide a warm, helpful assessment.
+
+Energy level: ${answers.energy}/5
+Emotional state: ${answers.emotionalState}
+Physical symptoms: ${answers.physical.length > 0 ? answers.physical.join(', ') : 'none reported'}
+Recent trigger: ${answers.trigger ?? 'nothing specific'}
+Sleep quality last night: ${answers.sleep}/5
+
+Rules:
+- Be warm, non-clinical, and encouraging
+- wellnessMessage must be 2-3 sentences that genuinely uplift the person
+- suggestedAction should be the single most helpful thing right now
+- insight should be one honest, empathetic sentence about their current state
+
+Respond ONLY with valid JSON (no extra text):
+{"primaryMood":"one word","severity":"mild","insight":"one empathetic sentence","wellnessMessage":"2-3 uplifting sentences","suggestedAction":"breathing","emoji":"single emoji"}`;
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 256,
+      }),
+    });
+    if (!response.ok) return null;
+    const json = await response.json();
+    const content = (json.choices?.[0]?.message?.content ?? '').trim();
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]);
+    if (
+      typeof parsed.primaryMood === 'string' &&
+      typeof parsed.severity === 'string' &&
+      typeof parsed.insight === 'string' &&
+      typeof parsed.wellnessMessage === 'string' &&
+      typeof parsed.suggestedAction === 'string' &&
+      typeof parsed.emoji === 'string'
+    ) {
+      return parsed as MoodAnalysis;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function checkFoodInteractionsAI(medicineNames: string[]): Promise<FoodInteraction[]> {
   const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
   if (!apiKey || apiKey === 'your_groq_api_key_here' || medicineNames.length === 0) return [];
